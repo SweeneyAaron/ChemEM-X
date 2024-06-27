@@ -1,0 +1,1541 @@
+<!-- 
+This file is part of the ChemEM-X software.
+
+Copyright (c) 2024 - Aaron Sweeney
+
+This module was developed by:
+  Aaron Sweeney    <aaron.sweeney AT cssb-hamburg.de>
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChemEM</title>
+    <link rel="stylesheet" type="text/css" href="/chimerax/ui/html/css/bootstrap-3.3.7.css">
+    <style>
+        body {
+            line-height: 1.6;
+            background-color: #e7eef2;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+            color: #424242;
+        }
+
+        h1 {
+            text-align: center;
+            color: #5c6bc0;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+        }
+
+        legend {
+            color: #004542;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .container {
+            background: white;
+            border: 1px solid #c5cae9;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+
+        label {
+            color: #424242;
+            margin-bottom: 8px;
+            font-weight: bold;
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        select, input[type="checkbox"], input[type="number"], input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+        }
+
+        .checkbox-label {
+            display: block;
+            position: relative;
+            padding-left: 35px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            font-size: 0.95em;
+            user-select: none;
+        }
+
+        .checkbox-label input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 25px;
+            width: 25px;
+            background-color: #eee;
+            border-radius: 4px;
+        }
+
+        .checkbox-label:hover input ~ .checkmark {
+            background-color: #ccc;
+        }
+
+        .checkbox-label input:checked ~ .checkmark {
+            background-color: #9DB5B2;
+        }
+
+        .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+        }
+
+        .checkbox-label input:checked ~ .checkmark:after {
+            display: block;
+        }
+
+        .checkbox-label .checkmark:after {
+            left: 9px;
+            top: 5px;
+            width: 7px;
+            height: 15px;
+            border: solid white;
+            border-width: 0 3px 3px 0;
+            -webkit-transform: rotate(45deg);
+            -ms-transform: rotate(45deg);
+            transform: rotate(45deg);
+        }
+
+        .buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        button, .submit {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #004542;
+            color: white;
+            font-size: 1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover, .submit:hover {
+            background-color: #9DB5B2;
+        }
+
+        button[type="reset"] {
+            background-color: #ef5350;
+        }
+
+        button[type="reset"]:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Flexbox layout for input and button */
+        .input-with-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .input-with-button label,
+        .input-with-button input[type="text"],
+        .input-with-button input[type="file"] {
+            flex: 1; /* Allows input and label to take up available space */
+            margin-right: 10px; /* Space between label/input and button */
+        }
+
+        .input-with-button input[type="text"],
+        .input-with-button input[type="file"] {
+            max-width: calc(100% - 120px); /* Adjust based on your layout */
+        }
+
+        .file-input-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .file-input-group label,
+        .file-input-group input[type="file"] {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .add-button {
+            padding: 8px 15px;
+            background-color: #004542;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .add-button:hover {
+            background-color: #9DB5B2;
+        }
+        
+        .collapse {
+            display: none;
+        }
+
+        /* Style for the toggle arrow */
+        .toggle-arrow {
+            cursor: pointer;
+            font-size: 1em;
+            user-select: none;
+        }
+        
+        #ligandList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+
+        #ligandList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #ligandList li:hover {
+            background-color: #e9eef7;
+        }
+
+        /* Style for the trash icon */
+        .trash-icon {
+            cursor: pointer;
+            width: 20px; /* Adjust size as needed */
+            height: 20px; /* Adjust size as needed */
+            visibility: hidden; /* Hidden by default */
+        }
+
+        #ligandList li:hover .trash-icon {
+            visibility: visible; /* Only visible on hover */
+        }
+        
+        .centroid-input-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .centroid-input-group label {
+            margin-right: 10px;
+        }
+
+        .centroid-input-group input[type="number"] {
+            width: 90px; /* Adjust width as needed */
+            margin-right: 10px;
+        }
+
+        
+
+        /* Styles for the centroid list */
+        #centroidList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+
+        #centroidList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #centroidList li:hover {
+            background-color: #e9eef7;
+        }
+
+        #centroidList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        /* Styles for tabs */
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #9DB5B2;
+        }
+
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }
+
+        .tab button:hover {
+            background-color: #001b1a;
+        }
+
+        .tab button.active {
+            background-color: #004542;
+        }
+
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+        
+        #manualBindingSitesList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        #manualBindingSitesList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        #manualBindingSitesList li:hover {
+            background-color: #e9eef7;
+        }
+        
+        #manualBindingSitesList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        /* Style for the manual binding site input groups */
+        .manual-binding-site-inputs {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .manual-binding-site-inputs > div {
+            flex-basis: calc(33% - 10px); 
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .manual-binding-site-inputs label {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        
+        .manual-binding-site-inputs input[type="number"] {
+            flex-grow: 1;
+        }
+
+        
+        /* Style for the delete button (if you choose to use a trash icon) */
+        .delete-button {
+            cursor: pointer;
+            background: none;
+            border: none;
+            margin-left: 10px;
+            color: #ef5350;
+        }
+        
+        .delete-button:hover {
+            color: #d32f2f;
+        }
+        
+        .file-input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .dialog-button {
+            background-color: #f0f0f0;
+            border: 1px solid #dcdcdc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            color: #9c9c9c; 
+        }
+        
+        .dialog-button:hover {
+            background-color: #e8e8e8;
+        }
+        
+        .file-path {
+            margin-left: 10px;
+            font-family: monospace;
+            color: #555;
+        }
+        
+        .scrollable-list-style {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 200px; /* Adjust based on your requirement */
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        .scrollable-list-style li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .scrollable-list-style li:hover {
+            background-color: #e9eef7;
+        }
+        
+        /* Job List Styles */
+        #jobList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .job-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background-color: gray;
+        }
+        
+        .pending {
+            background-color: grey;
+            
+        }
+        
+        .running {
+            background-color: green;
+            
+        }
+        
+        .completed {
+            background-color: blue;
+            
+        }
+        
+        .failed {
+            background-color: red;
+            
+        }
+        
+        .job-item span {
+            flex: 1;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        
+        .load-btn, .cancel-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .load-btn:hover, .cancel-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+
+
+        
+    </style>
+</head>
+<body>
+
+    <h1>
+        <img src="/Users/aaron.sweeney/Documents/ChemEM_chimera/ChemEM/src/chemEM_logo_transparent.png" alt="ChemEM" style="max-height: 60px;">
+    </h1>
+    
+    <!-- Tab Links -->
+    <div class="tab">
+        <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'QuickConfigTab')">Quick Config</button>
+        <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Site</button>
+        <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs</button>
+        <button class="tablinks" >Results</button>
+        <button class="tablinks" >Post-processing</button>
+        <!--<button class="tablinks" >Ligand Interactions</button> -->
+    </div>
+    
+    <div id="QuickConfigTab" class="tabcontent">
+    
+        
+        <div class="container" id="general">
+            <fieldset>
+                <legend>General parameters</legend>
+                    <label for="models">Protein:</label>
+                        <select id="models" name="models" >
+                        <!-- Options will be populated by populateDropdown function -->
+                        </select>
+                    
+                    <label for="maps">Cryo-EM map:</label>
+                        <select id="maps" name="mmaps">
+                        </select>
+                    
+                    <label for="resolution">Resolution (Å):</label>
+                    <input type="number" id="resolution" name="resolution" step="0.001" value="2.6">
+                
+                <!-- ligand inputs -->
+                <!-- Ligand SMILES input with Add button -->
+                <div class="form-group input-with-button">
+                    <label for="ligandSmiles">Ligand SMILES:</label>
+                    <input type="text" id="ligandSmiles" name="ligandSmiles" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                    <button type="button" class="add-button" onclick="addLigand()">Add</button>
+                </div>
+
+                <!-- Ligand File input with Add button -->
+                <div class="form-group input-with-button">
+                    
+                    <label for="ligandFile">Ligand File:</label>
+                    <!--<input type="file" id="ligandFile" name="ligandFile">-->
+                    <div class="form-group file-input-group">
+                    
+                        <button type="button" class="dialog-button" id="ligandFile" onclick="readFile('ligandFilePath')">Choose File</button>
+                        <span class="file-path" id="ligandFilePath"></span>
+                    </div>
+                    <button type="button" class="add-button" onclick="addLigandFile()">Add</button>
+                </div>
+                
+                 <!-- Interactive list for added ligands -->
+                <div class="form-group">
+                    <label for="ligandList">Added Ligands:</label>
+                    <ul id="ligandList"></ul>
+                </div>
+                
+            </fieldset>
+        </div>
+        
+        <div class="container" id="bindingsite">
+            <fieldset>
+                <legend>Binding site definition</legend>
+                <!-- Binding site centroids -->
+                <label style="font-weight: bold;">Centroid:</label>
+                <div class="centroid-input-group">
+                    
+                    <label>X:</label>
+                    <input type="number" id="centroidX" name="centroidX" step="0.001">
+                    
+                    
+                    <label>Y:</label>
+                    <input type="number" id="centroidY" name="centroidY" step="0.001">
+                    
+                   
+                    <label>Z:</label>
+                    <input type="number" id="centroidZ" name="centroidZ" step="0.001">
+                    
+                    
+                </div>
+                <!-- Box size inputs -->
+                <label style="font-weight: bold;">Box size:</label>
+                <div class="manual-binding-site-inputs">
+                    <div>
+                    
+                        <label>X:</label>
+                        <input type="number" id="QuickboxSizeX" value="" step="0.5">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="QuickboxSizeY" value="" step="0.5">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="QuickboxSizeZ" value="" step="0.5">
+    
+                    </div>
+                    
+                </div>
+                <div>
+                <button type="button" class="add-button"  onclick="addCentroid()">Add</button>
+                </div>
+                
+                
+                
+                <!-- List for added centroids -->
+                <div class="form-group">
+                    <label for="centroidList">Added Centroids:</label>
+                    <ul id="centroidList"></ul>
+                </div>
+                
+            </fieldset>
+        </div>
+        
+        
+        <div class="container" id="systemparameters">
+            <fieldset>
+                <legend>System parameters</legend>
+                <div class="form-group file-input-group">
+                    <label for="outputDirectory">Output location:</label>
+                    <button type="button" class="dialog-button" id="outputDirectory" onclick="setDir('output')">Choose Folder</button>
+                    <span class="file-path" id="output"></span>
+                </div>
+                <div class="form-group file-input-group">
+                    <label for="chememBackend">ChemEM executable:</label>
+                    <button type="button" class="dialog-button" id="chememBackend" onclick="readFile('chememBackendPath')">Choose File</button>
+                    <span class="file-path" id="chememBackendPath"></span>
+                </div>
+            </fieldset>
+        </div>
+        
+        <div class="container" id="runtime-option">
+            <fieldset>
+            <legend>Runtime Options</legend>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: significant features
+                    <input type="checkbox" id="significant_features" name="significant_features">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: difference map
+                    <input type="checkbox" id="difference_map" name="difference_map">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: split density
+                    <input type="checkbox" id="pre_process_split_density" name="pre_process_split_density">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: auto split point
+                    <input type="checkbox" id="auto_split_point" name="auto_split_point">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: auto split zone
+                    <input type="checkbox" id="auto_split_zone"  name="auto_split_zone">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Fitting
+                    <input type="checkbox" id="fitting" name="fitting">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Post Process
+                    <input type="checkbox" id="postprocess" name="postprocess">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Rescore
+                    <input type="checkbox" id="rescore" name="rescore">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        
+        </fieldset>
+    </div>
+    
+        <!-- Advanced Options -->
+    <div class="container" id="advanced-options">
+        <fieldset>
+            <legend>
+                <span class="toggle-arrow" onclick="toggleAdvancedOptions()">Advanced Options &#9660;</span>
+            </legend>
+            <div class="collapse" id="advancedOptionsContent">
+
+                    <div class="form-group">
+                        <label for="label_threshold">Pre Processing: Label threshold</label>
+                        <input type="number" id="label_threshold" name="label_threshold" step="0.001" placeholder= "0.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="auto_split_radius">Pre Processing: Auto-zone radius</label>
+                        <input type="number" id="auto_split_radius" name="auto_split_radius" step="0.001" placeholder="5.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="mi_weight">Fitting: MI weight</label>
+                        <input type="number" id="mi_weight" name="mi_weight" step="0.1", placeholder="50">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="global_k">Fitting: Global K</label>
+                        <input type="number" id="global_k" name="global_k" step="0.1", placeholder="75">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="docking_radius">Fitting: Docking radius </label>
+                        <input type="number" id="docking_radius" name="docking_radius" step="0.001" placeholder="15.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Fitting: Flexible sidechains
+                            <input type="checkbox" id="flexible_side_chains" name="flexible_side_chains">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Fitting: Implicit Solvent
+                            <input type="checkbox" id="solvent" name="solvent">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="n_ants">Fitting: <i>N</i> Ants</label>
+                        <input type="number" id="n_ants" name="n_ants" step="1", placeholder="20">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="n_cpu">Fitting: <i>N</i> CPU</label>
+                        <input type="number" id="n_cpu" name="n_cpu" step="1", placeholder="20">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="max_iterations">Fitting: <i>N</i> Iterations</label>
+                        <input type="number" id="max_iterations" name="max_iterations" step="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="generate_diverse_solutions">Fitting: Diverse solutions</label>
+                        <input type="number" id="generate_diverse_solutions" name="generate_diverse_solutions" step="0.01" placeholder="0.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Post Process: Flexible sidechains
+                            <input type="checkbox" id="refine_side_chains" name="refine_side_chains" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="post_process_num_solutions">Post Process: <i>N</i> Solutions</label>
+                        <input type="number" id="post_process_num_solutions" name="post_process_num_solutions" step="1", placeholder="15">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cycles">Post Process: Simulate Anneling Cycles</label>
+                        <input type="number" id="cycles" name="cycles" step="1", placeholder="4">
+                    </div>
+
+            </div><!-- end of advance options -->
+        </fieldset>
+    
+    </div>
+            
+    <div class="buttons">
+    <button type="reset" onclick=resetQuickConfigTab()>Reset</button>
+    <button type="button" class="submit" onclick=saveConfFile()>Save Config file</button>
+    <button type="button" class="submit" onclick=runChemEM()>Run ChemEM</button>
+    </div>
+    
+    </div><!-- end of tab -->
+    
+    
+    <div id="JobsTab" class="tabcontent">
+        <div class="container" id="jobcontent">
+            <legend>Submitted Jobs</legend>
+            <div id="jobListContainer">
+                <ul id="jobList"></ul>
+            </div>
+        </div>
+        
+        <div class="container" id="loadJobFromDir">
+            <fieldset>
+                <legend>Load Results</legend>
+                    <div class="form-group file-input-group">
+                        <label for="loadJob">Results directory:</label>
+                        <button type="button" class="dialog-button" id="loadJob" onclick="setDir('loadJob')">Choose Folder</button>
+                        <span class="file-path" id="loadJobPath"></span>
+                    </div>
+                    <button type="button" class="add-button">Load</button>  
+            </fieldset>
+        </div>
+    </div><!-- end of tab -->
+    
+    
+    <div id="BindingSiteTab" class="tabcontent">
+        <div class="container" id="manual-binding-site">
+            <fieldset>
+                <legend>Binding Site Definition</legend>
+                
+                <button type="button" onclick="activateMarkerPlacement()">With Marker</button>
+                <button type="button" >Save</button>
+                 <button type="button" onclick="resetBindingSiteFields()" >New</button>
+                 <button type="button" >Autodetect sites</button>
+                <!-- Centroid inputs -->
+                <label style="font-weight: bold;">Centroid:</label>
+                <div class="manual-binding-site-inputs">
+                    
+                    <div>
+                        <label>X:</label>
+                        <input type="number" id="manualCentroidX" value="147.525" step="0.1">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="manualCentroidY" value="159.684" step="0.1">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="manualCentroidZ" value="157.044" step="0.1">
+                    </div>
+                </div>
+
+                <!-- Box size inputs -->
+                <label style="font-weight: bold;">Box size:</label>
+                <div class="manual-binding-site-inputs">
+                    <div>
+                        <label>X:</label>
+                        <input type="number" id="manualboxSizeX" value="25" step="0.5">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="manualboxSizeY" value="25" step="0.5">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="manualboxSizeZ" value="25" step="0.5">
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        
+        <div class="container" id="manual-binding-site">
+            <fieldset>
+            
+                <legend>Saved Binding Sites</legend>
+                <label style="font-weight: bold;">Saved Binding Sites</label>
+                <ul id="manualBindingSitesList"></ul>
+            
+            </fieldset>
+        </div>
+    
+    </div><!-- end of tab -->
+    
+    
+    
+    
+    
+    <script>
+    let ligandIdCounter = 0;
+    let bindingSiteCounter = 0;
+    let jobIdCounter = 0;
+    
+    function activateMarkerPlacement() {
+            
+            //sendSiteValueToBackend("chemem:ActivateMarkerPlacement", "None");
+            sendSiteValueToBackend("chemem:BindingSiteFromMarker", "None");
+            
+    }
+
+    // Function to open a tab
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    
+    function toggleAdvancedOptions() {
+        var content = document.getElementById("advancedOptionsContent");
+        var arrow = document.querySelector(".toggle-arrow");
+        if (content.style.display === "none" || content.style.display === "") {
+            content.style.display = "block";
+            arrow.innerHTML = "Advanced Options &#9650;"; // Arrow pointing up
+        } else {
+            content.style.display = "none";
+            arrow.innerHTML = "Advanced Options &#9660;"; // Arrow pointing down
+        }
+    }
+    
+    
+    function updateSelect(elementId, options) {
+        const selectElement = document.getElementById(elementId);
+        if (!selectElement) {
+            console.error("No select element found with ID:", elementId);
+            return;
+        }
+        selectElement.innerHTML = ''; // Clear existing options
+    
+        options.forEach(optionValue => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.text = optionValue;
+            selectElement.appendChild(option);
+        });
+    }
+    
+    function sendSiteValueToBackend(action, siteValue) {
+        
+        var xhr = new XMLHttpRequest(); // Create a new XMLHttpRequest object
+        var url = action + "?siteValue=" + encodeURIComponent(JSON.stringify(siteValue)); // Construct the URL with action and query parameter
+        xhr.open("GET", url, true); // Prepare the request
+    
+        xhr.onreadystatechange = function() { // Call a function when the state changes
+            if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+                // Request finished. Do processing here.
+                console.log("Site value sent to backend:", siteValue);
+            }
+        }
+    
+        xhr.send(); // Send the request
+    }
+    
+    function readFile(file) {
+        sendSiteValueToBackend("chemem:ReadFile", file)
+    }
+    
+    function setDir(dir) {
+        sendSiteValueToBackend("chemem:SetDir", dir)
+    
+    }
+    
+    function setFilePath( elementId, file){
+        document.getElementById(elementId).textContent = file;
+    }
+    
+    
+    function addLigandFile() {
+        ligandIdCounter++;
+    
+        // Collect the file path from the span, not an input field
+        const ligandFilePath = document.getElementById("ligandFilePath").textContent.trim();
+        if (!ligandFilePath) {
+            alert("No ligand file provided.");
+            return;
+        }
+    
+        const className = "PathParameter"; 
+        const ligandData = {
+            id: ligandIdCounter,
+            value: ligandFilePath,
+            class: className
+        };
+    
+        // Send the JSON object to the backend for the file handling
+        sendSiteValueToBackend("chemem:AddLigandFile", ligandData);
+        
+        // Optionally clear the displayed file path
+        document.getElementById("ligandFilePath").textContent = '';
+    
+        // Update the ligand list on the UI
+        addLigandToList(ligandData);
+    }
+    
+    function addLigand() {
+        
+        ligandIdCounter++;
+        
+        // Collect the SMILES string from the input field
+        const smilesString = document.getElementById("ligandSmiles").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string provided.");
+            return;
+        }
+        
+        const className = "SmilesParameter"; // Static for now, change as needed
+        const ligandData = {
+            id: ligandIdCounter,
+            value: smilesString,
+            class: className
+        };
+        
+        sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData)
+        document.getElementById("ligandSmiles").value = '';
+        addLigandToList(ligandData);
+    }
+    
+    function addLigandToList(ligandData) {
+        const ligandList = document.getElementById('ligandList');
+    
+        // Create the list item
+        const li = document.createElement('li');
+        li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
+        li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
+        
+        // Create the remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = function() { removeLigand(ligandData.id); };  // Placeholder function for now
+    
+        // Append the button to the list item
+        li.appendChild(removeBtn);
+    
+        // Append the list item to the ligand list
+        ligandList.appendChild(li);
+    }
+
+    
+    function removeLigand(ligandId) {
+        const ligandItem = document.getElementById(`ligand-${ligandId}`);
+        if (ligandItem) {
+            ligandItem.parentNode.removeChild(ligandItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveLigand", ligandId);
+        
+    }
+    
+    
+    function addCentroid() {
+        var x = document.getElementById("centroidX").value;
+        var y = document.getElementById("centroidY").value;
+        var z = document.getElementById("centroidZ").value;
+        var boxX = document.getElementById("QuickboxSizeX").value;
+        var boxY = document.getElementById("QuickboxSizeY").value;
+        var boxZ = document.getElementById("QuickboxSizeZ").value;
+    
+        // Generate a unique key for the binding site
+        var currentBindingSiteKey = ++bindingSiteCounter;
+        sendSiteValueToBackend("chemem:IncrementBindingSiteCounter", currentBindingSiteKey)
+    
+        if (x && y && z && boxX && boxY && boxZ) {
+            var siteValue = `${currentBindingSiteKey} - Centroid: (${x}, ${y}, ${z}) | Box Size: (${boxX}, ${boxY}, ${boxZ});`;
+            var bindingSiteValue = `(${x}, ${y}, ${z}) | (${boxX}, ${boxY}, ${boxZ})`;
+            sendParameterToBackend("chemem:AddBindingSite", currentBindingSiteKey, bindingSiteValue, "BindingSiteParameter" );
+            
+            // Add site value to the visual list
+            var centroidListUI = document.getElementById("centroidList");
+            var li = document.createElement("li");
+            li.textContent = siteValue + " ";
+            //here is new!!
+            li.setAttribute('data-key', currentBindingSiteKey);
+            centroidListUI.appendChild(li);
+    
+            // Add a delete button to each list item
+            var deleteButton = document.createElement("button");
+            deleteButton.textContent = "Delete";
+            deleteButton.onclick = function() {
+                var listItemKey = li.getAttribute('data-key'); // Get the key from the list item
+                centroidListUI.removeChild(li);
+                removeBindingSite(listItemKey);
+                
+            };
+            li.appendChild(deleteButton);
+            centroidListUI.appendChild(li);
+    
+            // Clear the input fields
+            resetManualBindingSiteFields();
+        } else {
+            // Optionally, alert the user if not all fields are filled
+            alert('Please fill in all fields.');
+        }
+    }
+    
+    function removeBindingSite(key) {
+        sendSiteValueToBackend("chemem:RemoveBindingSite", key);
+    }
+    
+    function generateUniqueId() {
+        return 'bindingSite-' + Date.now();
+    }   
+    
+    function resetBindingSiteFields() {
+    
+        document.getElementById("manualCentroidX").value = '';
+        document.getElementById("manualCentroidY").value = '';
+        document.getElementById("manualCentroidZ").value = '';
+        document.getElementById("manualboxSizeX").value = '';
+        document.getElementById("manualboxSizeY").value = '';
+        document.getElementById("manualboxSizeZ").value = '';
+        sendSiteValueToBackend("chemem:IncrementBindingSiteCounter", "None");
+        bindingSiteCounter++;
+        alert(generateUniqueId());
+        
+    }
+    
+    function resetManualBindingSiteFields() {
+        document.getElementById("CentroidX").value = '';
+        document.getElementById("CentroidY").value = '';
+        document.getElementById("CentroidZ").value = '';
+        document.getElementById("boxSizeX").value = '';
+        document.getElementById("boxSizeY").value = '';
+        document.getElementById("boxSizeZ").value = '';
+        
+    }
+    
+    //function to add binding site to binding site tab
+    function addBindingSiteEntry(siteValue, dataKey) {
+        const bindingSiteList = document.getElementById("manualBindingSitesList");
+    
+        // Create the list item
+        const li = document.createElement("li");
+        li.textContent = siteValue;
+        li.setAttribute('data-key', dataKey); // Set the data-key attribute
+        
+        
+        // Create the Load button
+        const loadButton = document.createElement("button");
+        loadButton.className = "icon-button"; // Add a class for styling
+        loadButton.onclick = function() {
+            alert(`Loading details for: ${siteValue}`);
+            // Add logic to load binding site details here
+        };
+        
+        // Create the image element for the Load button
+        const loadIcon = document.createElement("img");
+        loadIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/view.svg";
+        loadIcon.alt = "Load";
+        loadIcon.className = "icon"; // Add a class for styling
+        
+        // Append the image to the Load button
+        loadButton.appendChild(loadIcon);
+        
+        // Create the + button (Placeholder for additional functionality)
+        const addButton = document.createElement("button");
+        addButton.textContent = "+";
+        addButton.onclick = function() {
+            alert(`Additional functionality for: ${siteValue}`);
+            // Add additional functionality here
+        };
+        
+        // Create the Delete button
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "icon-button"; // Add a class for styling
+        deleteButton.onclick = function() {
+            bindingSiteList.removeChild(li);
+            removeBindingSite(dataKey); // Ensure this function is implemented to handle backend removal
+        };
+        
+        // Create the image element for the Delete button
+        const deleteIcon = document.createElement("img");
+        deleteIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/trash.svg"; // Update this path as needed
+        deleteIcon.alt = "Delete";
+        deleteIcon.className = "icon"; // Add a class for styling
+        
+        // Append the image to the Delete button
+        deleteButton.appendChild(deleteIcon);
+        
+        // Append buttons to the list item
+        li.appendChild(loadButton);
+        li.appendChild(addButton);
+        li.appendChild(deleteButton);
+        
+        // Append the list item to the binding site list
+        bindingSiteList.appendChild(li);
+    }
+    
+    function sendCheckboxData(checkboxId, isChecked) {
+        const className = "BooleanParameter";
+        const data = {
+            id: checkboxId,
+            value: isChecked,
+            class: className
+            };
+        
+        sendSiteValueToBackend("chemem:UpdateChemEMParameter", data);
+    }
+    
+    function sendParameterToBackend(command, dataId, dataValue, className ) {
+        const data = {
+        id : dataId,
+        value: dataValue,
+        class : className
+        };
+        sendSiteValueToBackend(command, data);
+    }
+    
+    function onModelsPopulated() {
+        const selectElement = document.getElementById('models');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentModel", selectElement.value, selectElement.value, "ModelParameter");
+        }
+    }
+    
+    function onMapsPopulated() {
+        const selectElement = document.getElementById('maps');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentMap", selectElement.value, selectElement.value, "MapParameter");
+        }
+    }
+
+    function saveConfFile() {
+        
+         sendSiteValueToBackend("chemem:SaveConfFile", "None");
+        
+    }
+    
+    function runChemEM() {
+        sendSiteValueToBackend("chemem:RunChemEM", "None");
+        // Find the button/link that triggers the "Jobs" tab
+        const jobsTabButton = document.querySelector(".tablinks[onclick*='JobsTab']");
+        
+        // Check if the button is found and switch to the "Jobs" tab
+        if (jobsTabButton) {
+            openTab({ currentTarget: jobsTabButton }, "JobsTab");
+        } else {
+            console.error("Jobs tab button/link not found!");
+        }
+        
+    }
+   
+    // Function to open a tab
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    
+    // Function to add a job
+    function addJob(jobData) {
+        // Extract job properties from the incoming data
+        const { id, status } = jobData;
+    
+        // Increment a unique identifier counter if needed, otherwise use the provided job ID
+        const jobId = id;
+    
+        // Get the job list element from the DOM
+        const jobList = document.getElementById("jobList");
+    
+        // Create a new list item to represent the job
+        const li = document.createElement("li");
+        li.className = 'job-item';
+        li.id = `job-${jobId}`;
+    
+        // Create a status indicator element
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = 'status-indicator';
+    
+        // Add initial status class
+        statusIndicator.classList.add(status.toLowerCase());
+    
+        // Create a job info span to show job ID, status, and command
+        const jobInfo = document.createElement('span');
+        jobInfo.textContent = `Job ID: ${jobId}, Status: ${status}`;
+    
+        // Create a button to load job details (you can implement the action)
+        const loadBtn = document.createElement("button");
+        loadBtn.className = 'load-btn';
+        loadBtn.textContent = "Load";
+        loadBtn.onclick = function () {
+            alert(`Loading details for Job ID: ${jobId}`);
+            // You can add more logic to load specific job details here
+        };
+    
+        // Create a button to cancel the job (implement the backend job cancellation logic)
+        const removeBtn = document.createElement("button");
+        removeBtn.className = 'cancel-btn';
+        removeBtn.textContent = "Cancel";
+        removeBtn.onclick = function () {
+            removeJob(jobId);
+        };
+    
+        // Append elements to the job item
+        li.appendChild(statusIndicator);
+        li.appendChild(jobInfo);
+        li.appendChild(loadBtn);
+        li.appendChild(removeBtn);
+    
+        // Add the job item to the job list
+        jobList.appendChild(li);
+    
+        // Optionally simulate or update job status dynamically (as an example)
+        updateJobStatus(jobId, "Running");
+    }
+    
+    // Function to remove a job item from the UI
+    function removeJob(jobId) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            jobItem.parentNode.removeChild(jobItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveJob", jobId)
+    }
+
+
+    function updateJobStatus(jobId, newStatus) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            const statusIndicator = jobItem.querySelector('.status-indicator');
+            const jobInfo = jobItem.querySelector('span');
+    
+            // Update the class for the status indicator
+            statusIndicator.className = 'status-indicator';  // Reset class
+            statusIndicator.classList.add(newStatus.toLowerCase());  // Add new status class
+    
+            // Update the job info text content
+            jobInfo.textContent = `Job ID: ${jobId}, Status: ${newStatus}`;
+        }
+    }
+    
+    function resetQuickConfigTab() {
+        
+        const quickConfigTab = document.getElementById("QuickConfigTab");
+    
+        // IDs to retain their values (dropdowns and file paths)
+        const retainIds = ['models', 'maps', 'chememBackendPath'];
+    
+        // Query all input fields, lists, and spans within QuickConfigTab except those specified to retain
+        const elements = quickConfigTab.querySelectorAll('input, select, ul, span');
+    
+        elements.forEach(element => {
+            const id = element.id;
+    
+            // Skip elements with specific IDs to retain
+            if (retainIds.includes(id)) return;
+    
+            // Handle input fields (number, text, checkbox)
+            if (element.tagName === 'INPUT') {
+                if (element.type === 'checkbox') {
+                    // Specific logic to ensure refine_side_chains is always checked
+                    if (id === 'refine_side_chains') {
+                        element.checked = true; // Ensure refine_side_chains is checked
+                    } else {
+                        element.checked = false; // Uncheck all other checkboxes
+                    }
+                } else {
+                    element.value = ''; // Clear all text and number fields
+                }
+            }
+    
+            // Handle unordered lists (like Added Ligands or Centroids)
+            if (element.tagName === 'UL') {
+                element.innerHTML = ''; // Clear the list
+            }
+    
+            // Handle spans (used for file paths, etc.)
+            if (element.tagName === 'SPAN') {
+                element.textContent = ''; // Clear file path display spans
+            }
+        });
+    
+    
+        sendSiteValueToBackend("chemem:ResetConfig", "None");
+    }
+
+
+   
+
+   
+   document.addEventListener('DOMContentLoaded', function() {
+   
+   
+        // Perform the initial tab opening
+        document.getElementById("defaultOpen").click();
+    
+        // Send initial data to backend upon loading
+        sendSiteValueToBackend("chemem:UpdateModels", "None");
+        sendSiteValueToBackend("chemem:UpdateMaps", "None");
+        
+        
+        // Attach change listeners to all checkboxes within the runtime option container
+        const checkboxes = document.querySelectorAll('#runtime-option input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                sendCheckboxData(this.id, this.checked);
+            });
+        });
+        
+        // update current model on selection
+        const selectElement = document.getElementById('models');
+        selectElement.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentModel", this.value, this.value, "ModelParameter");
+        });
+        
+        // Manually trigger the event if there's already a selected value
+        
+        //if (selectElement.value) {
+            
+        //     sendParameterToBackend("chemem:SetCurrentModel", selectElement.value, selectElement.value, "ModelParameter");
+        //}
+        
+        // update current model on selection
+        const selectElementMap = document.getElementById('maps');
+        selectElementMap.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentMap", this.value, this.value, "MapParameter");
+        });
+        
+        const inputElementresolution = document.getElementById('resolution');
+        inputElementresolution.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        //update advanced parameters 
+        const inputElementLabelThreshold = document.getElementById('label_threshold');
+        inputElementLabelThreshold.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementAutozoneRadius = document.getElementById('auto_split_radius');
+        inputElementAutozoneRadius.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementMiWeight = document.getElementById('mi_weight');
+        inputElementMiWeight.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementGlobalK = document.getElementById('global_k');
+        inputElementGlobalK.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementDockingRaidus = document.getElementById('docking_radius');
+        inputElementDockingRaidus.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+        });
+        
+        const inputElementFlexibleSidechains = document.getElementById('flexible_side_chains');
+        inputElementFlexibleSidechains.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementImplicitSolvent = document.getElementById('solvent');
+        inputElementImplicitSolvent.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementNAnts = document.getElementById('n_ants');
+        inputElementNAnts.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementNCpu = document.getElementById('n_cpu');
+        inputElementNCpu.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementNIter = document.getElementById('max_iterations');
+        inputElementNIter.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementDiverseSol = document.getElementById('generate_diverse_solutions');
+        inputElementDiverseSol.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+        });
+        
+        const inputElementPostflexibleSidechains = document.getElementById('refine_side_chains');
+        inputElementPostflexibleSidechains.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementpostNsol = document.getElementById('post_process_num_solutions');
+        inputElementpostNsol.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementpostCycles = document.getElementById('cycles');
+        inputElementpostCycles.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+    });
+    
+    </script>
+</body>
+       
+        
+        

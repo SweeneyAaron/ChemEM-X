@@ -1,0 +1,28 @@
+Metadata-Version: 2.1
+Name: ChimeraX-ChemEM
+Version: 0.1
+Summary: Protein-Protein Interaction Detector
+Home-page: https://www.topf-group.com/
+Author: Aaron Sweeney
+Author-email: aaron.sweeney@cssb-hamburg.de
+Classifier: Framework :: ChimeraX
+Classifier: Intended Audience :: Science/Research
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Visualization
+Classifier: Topic :: Scientific/Engineering :: Chemistry
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics
+Classifier: Development Status :: 3 - Alpha
+Classifier: License :: Freeware
+Classifier: Environment :: MacOS X :: Aqua
+Classifier: Environment :: Win32 (MS Windows)
+Classifier: Environment :: X11 Applications
+Classifier: Operating System :: MacOS :: MacOS X
+Classifier: Operating System :: Microsoft :: Windows :: Windows 10
+Classifier: Operating System :: POSIX :: Linux
+Classifier: ChimeraX :: Bundle :: Structure Prediction :: 1,1 :: chimerax.ChemEM ::  :: 
+Classifier: ChimeraX :: Tool :: ChemEM :: Structure Prediction :: model ligands in cryo-EM maps
+Requires-Python: >=3.7
+
+ProPLID
+
+PPI detector.

@@ -1,0 +1,12 @@
+ChimeraX_ChemEM.egg-info/PKG-INFO
+ChimeraX_ChemEM.egg-info/SOURCES.txt
+ChimeraX_ChemEM.egg-info/dependency_links.txt
+ChimeraX_ChemEM.egg-info/requires.txt
+ChimeraX_ChemEM.egg-info/top_level.txt
+src/__init__.py
+src/chemem_job.py
+src/chemem_marker.py
+src/map_masks.py
+src/template.html
+src/tool.py
+src/view.py
