@@ -9,7 +9,7 @@ import numpy as np
 from scipy.spatial import distance_matrix 
 from scipy.ndimage.morphology import generate_binary_structure
 from scipy.ndimage import label
-from scipy.ndimage import  grey_erosion, grey_opening, grey_closing, grey_dilation
+from scipy.ndimage import grey_opening, grey_closing
 from scipy.ndimage import gaussian_filter
 from skimage import filters
 from chimerax.map_data import ArrayGridData
@@ -51,7 +51,7 @@ class SignificantFeatures:
         #TODO! call filtered_maps from here need to link index from current_filtered_maps and list ids
         
     def add_filtered_maps_to_list(self):
-        self.js_code = []
+        self.js_code = [] 
         for num, sig_feat in enumerate(self.current_filtered_maps): 
             string = f'{num} - % > Thr : {sig_feat[0][2]}, n > 0 : {sig_feat[0][0]}'
             self.js_code.append((num, string))

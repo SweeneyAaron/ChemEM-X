@@ -51,7 +51,7 @@ class SignificantFeatures:
         #TODO! call filtered_maps from here need to link index from current_filtered_maps and list ids
         
     def add_filtered_maps_to_list(self):
-        self.js_code = []
+        self.js_code = [] 
         for num, sig_feat in enumerate(self.current_filtered_maps): 
             string = f'{num} - % > Thr : {sig_feat[0][2]}, n > 0 : {sig_feat[0][0]}'
             self.js_code.append((num, string))

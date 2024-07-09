@@ -153,10 +153,13 @@ class CHEMEM(HtmlToolInstance):
         self.current_renderd_site_id = None
         self.rendered_site = None
         self.current_significant_features_object = None
+        self._handler_references = [self.add_model_handeler, 
+                                     self.remove_model_handeler, 
+                                     self.moved_model_handeler]
         #remove!!
         self.avalible_binding_sites = 0
         
-        self.session.metadata = self
+        #self.session.metadata = self
 
     def run(self):
         chemem_path = self.parameters.parameters['chememBackendPath'].value 
@@ -168,7 +171,15 @@ class CHEMEM(HtmlToolInstance):
         js_code = "resetQuickConfigTab();"
         self.run_js_code(js_code)
         self.job_handeler.add_job(job)
-
+    
+    def delete(self):
+        print('Closing....')
+        for handler in self._handler_references:
+            handler.remove() 
+        
+        self._handler_references.clear() 
+        super().delete()
+    
     def mkdir(self, path):
         try:
             os.mkdir(path)
