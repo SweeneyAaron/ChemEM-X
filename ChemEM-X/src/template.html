@@ -728,14 +728,20 @@ This module was developed by:
             <fieldset>
                 <legend>System parameters</legend>
                 <div class="form-group file-input-group">
-                    <label for="outputDirectory">Output location:</label>
+                    <label for="outputDirectory">Output Location:</label>
                     <button type="button" class="dialog-button" id="outputDirectory" onclick="setDir('output')">Choose Folder</button>
                     <span class="file-path" id="output"></span>
                 </div>
                 <div class="form-group file-input-group">
-                    <label for="chememBackend">ChemEM executable:</label>
-                    <button type="button" class="dialog-button" id="chememBackend" onclick="readFile('chememBackendPath')">Choose File</button>
+                    <label for="chememBackend">Add ChemEM Executable:</label>
+                    <button type="button" class="dialog-button" id="chememBackend" onclick="readFileAndAlterChemEM('avalible_chemem_exes')">Choose File</button>
                     <span class="file-path" id="chememBackendPath"></span>
+                </div>
+                <div>
+                 <label for="chememExes">ChemEM Executable:</label>
+                     <select id="chememExes" name="chememExes">
+                     <!-- Options will be populated by populateDropdown function -->
+                     </select>
                 </div>
             </fieldset>
         </div>
@@ -1116,6 +1122,7 @@ This module was developed by:
     
     function updateSelect(elementId, options) {
         const selectElement = document.getElementById(elementId);
+        alert(elementId);
         if (!selectElement) {
             console.error("No select element found with ID:", elementId);
             return;
@@ -1155,7 +1162,13 @@ This module was developed by:
     }
     
     function readFile(file) {
+    //reads a file and adds it to chemem paramters 
         sendSiteValueToBackend("chemem:ReadFile", file)
+    }
+    
+    function readFileAndAlterChemEM(file) {
+    //reads a file and alters the state of chemEM
+        sendSiteValueToBackend("chemem:ReadFileAndAlterChemEM", file)
     }
     
     function setDir(dir) {
@@ -1589,6 +1602,14 @@ This module was developed by:
         }
     }
     
+    function onExesPopulated() {
+        const selectElement = document.getElementById('chememExes');
+        if (selectElement.value) { 
+            sendParameterToBackend("chemem:SetCurrentExe", selectElement.value, selectElement.value, "PathParameter")
+        }
+       
+    }
+    
     function onMapsPopulated() {
         const selectElement = document.getElementById('maps');
         if (selectElement.value) {
@@ -1843,7 +1864,7 @@ This module was developed by:
         // Send initial data to backend upon loading
         sendSiteValueToBackend("chemem:UpdateModels", "None");
         sendSiteValueToBackend("chemem:UpdateMaps", "None");
-        
+        sendSiteValueToBackend("chemem:UpdateExes", "None");
         
         // Attach change listeners to all checkboxes within the runtime option container
         const checkboxes = document.querySelectorAll('#runtime-option input[type="checkbox"]');
@@ -1870,6 +1891,11 @@ This module was developed by:
         const selectElementMap = document.getElementById('maps');
         selectElementMap.addEventListener('change', function() {
             sendParameterToBackend("chemem:SetCurrentMap", this.value, this.value, "MapParameter");
+        });
+        
+        const selectElementExe = document.getElementById('chememExes');
+        selectElementExe.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentExe", this.value, this.value, "PathParameter");
         });
         
         const inputElementresolution = document.getElementById('resolution');

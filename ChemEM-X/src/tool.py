@@ -9,6 +9,7 @@
 
 from . import view
 import os
+import subprocess
 import json
 import numpy as np
 from json.decoder import JSONDecodeError
@@ -156,10 +157,14 @@ class CHEMEM(HtmlToolInstance):
         self._handler_references = [self.add_model_handeler, 
                                      self.remove_model_handeler, 
                                      self.moved_model_handeler]
+        
+        self.avalible_chemem_exes =  get_chemem_paths()
         #remove!!
         self.avalible_binding_sites = 0
         
-        #self.session.metadata = self
+        
+        
+        self.session.metadata = self
 
     def run(self):
         chemem_path = self.parameters.parameters['chememBackendPath'].value 
@@ -666,7 +671,31 @@ class TransferSiteToConf(Command):
         chemem.parameters.add_list_parameter('binding_sites_conf', site)
         chemem.run_js_code(cls.js_code(site))
 
+class UpdateExes(Command):
+    
+    @classmethod 
+    def js_code(cls, exe_names):
+        options_json = json.dumps(exe_names)
 
+        js_code = f'''
+        updateSelect("chememExes", {options_json});
+        onExesPopulated();
+        '''
+        return js_code
+    
+    @classmethod 
+    def run(cls, chemem, query):
+        exe_names = []
+        for index, exe in enumerate(chemem.avalible_chemem_exes):
+            exe_names.append( cls.get_exe_id( index, exe) )
+        
+        js_code = cls.js_code(exe_names)
+        chemem.run_js_code(js_code)
+    
+    @classmethod 
+    def get_exe_id(cls, index, exe ):
+        return f'{exe.value}'
+        
 class UpdateModels(Command):
     @classmethod
     def js_code(cls, model_names):
@@ -675,6 +704,7 @@ class UpdateModels(Command):
         updateSelect("models", {options_json});
         onModelsPopulated();
         '''
+        
         return js_code
       
     
@@ -691,7 +721,19 @@ class UpdateModels(Command):
     @classmethod 
     def get_model_id(cls, model):
         return f'{".".join([str(i) for i in model.id]) } - {model.name}'
+
+
+class SetCurrentExe(Command):
     
+    @classmethod 
+    def run(cls, chemem, query):
+        path = [i for i in chemem.avalible_chemem_exes if i.value == query.value][0]
+        cls.update_chemem(chemem, path)
+    
+    @classmethod 
+    def update_chemem(cls, chemem, path):
+       chemem.parameters.parameters['chememBackendPath'] = path 
+            
     
 class SetCurrentModel(Command):
     
@@ -766,7 +808,36 @@ class UpdateMaps(Command):
     @classmethod 
     def get_map_id(cls, model):
         return f'{".".join([str(i) for i in model.id]) } - {model.name}'
+
+
+class ReadFileAndAlterChemEM(Command):
+    
+    @classmethod 
+    def js_code(cls):
         
+        js_code = 'sendSiteValueToBackend("chemem:UpdateExes", "None");'
+        return js_code
+    
+    @classmethod 
+    def run(cls, chemem, query):
+        file_dialog = open_command.dialog.OpenDialog(parent=chemem.session.ui.main_window, starting_directory='' )
+        file = file_dialog.get_path()
+        if file is not None:
+            if os.path.isfile(file):
+                js_code = cls.js_code()
+                cls.update_chemem(chemem, file, query)
+                
+            else:
+                js_code= f"alert(File does not exist: {file});"
+            
+            chemem.run_js_code(js_code)
+    
+    @classmethod
+    def update_chemem(cls,chemem, file, query):
+        
+        attribute = getattr(chemem, query)
+        attribute += [PathParameter(file, file)]
+        setattr(chemem, query, attribute)
      
 class ReadFile(Command):
     
@@ -794,6 +865,7 @@ class ReadFile(Command):
     
     @classmethod
     def update_chemem(cls,chemem, file, query):
+        
         chemem.parameters.add(PathParameter(query, file))
 
 class SetDir(Command):
@@ -1254,6 +1326,83 @@ def activate_marker_placement(chemem, parameter):
 #║                             Helper functions                                ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
 
+
+
+
+def set_conda_environment():
+    conda_path_guess = [
+        os.path.expanduser("~/anaconda3/bin"),
+        os.path.expanduser("~/miniconda3/bin"),
+        "C:\\ProgramData\\Anaconda3\\Scripts",
+        "C:\\ProgramData\\Miniconda3\\Scripts",
+        "C:\\Anaconda3\\Scripts",
+        "C:\\Miniconda3\\Scripts"
+    ]
+    
+    for path in conda_path_guess:
+        if os.path.exists(path):
+            os.environ["PATH"] += os.pathsep + path
+
+def find_anaconda_path():
+    # Ensure conda is in the PATH
+    set_conda_environment()
+
+    # Check for CONDA_PREFIX environment variable
+    conda_prefix = os.getenv('CONDA_PREFIX')
+    if conda_prefix and os.path.exists(conda_prefix):
+        return conda_prefix
+
+    # Check if 'conda' command is available in the PATH
+    try:
+        conda_path = subprocess.check_output(['conda', 'info', '--base'], stderr=subprocess.DEVNULL).decode().strip()
+        if os.path.exists(conda_path):
+            return conda_path
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass
+
+    return None
+
+def get_conda_env_paths(conda_base_path):
+    envs_path = os.path.join(conda_base_path, 'envs')
+    if os.path.exists(envs_path):
+        
+        return [os.path.join(envs_path, env) for env in os.listdir(envs_path)]
+    return []
+
+def check_chemem_version(env_path):
+    bin_dir = os.path.join(env_path, 'bin')
+    if not os.path.exists(bin_dir):
+        bin_dir = os.path.join(env_path, 'Scripts')  # For Windows compatibility
+        
+    chemem_executable = os.path.join(bin_dir, 'chemem.chemem_path')
+    if os.path.exists(chemem_executable):
+        
+        return True,  os.path.join(bin_dir, 'chemem')
+        
+    return False, None
+
+def get_chemem_paths():
+    conda_base_path = find_anaconda_path()
+    if not conda_base_path:
+        print("Anaconda installation not found.")
+        return []
+
+    env_paths = get_conda_env_paths(conda_base_path)
+    
+    all_paths = []
+    for env_path in env_paths:
+        found, chemem_executable = check_chemem_version(env_path)
+        if found:
+            all_paths.append(chemem_executable)
+            
+    return [PathParameter(i,i) for i in all_paths]
+
+# Example usage
+anaconda_path = find_anaconda_path()
+if anaconda_path:
+    print(f"Anaconda is installed at: {anaconda_path}")
+else:
+    print("Anaconda installation not found.")
 
 
 def generate_unique_id():
