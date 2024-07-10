@@ -1405,7 +1405,8 @@ This module was developed by:
         // Append the image to the Load button
         loadButton.appendChild(loadIcon);
         
-        // Create the + button (Placeholder for additional functionality)
+        // Create the + button 
+        // transfer to conf 1 here
         const addButton = document.createElement("button");
         addButton.className = "icon-button"; // Add a class for styling
         addButton.onclick = function() {
@@ -1421,7 +1422,7 @@ This module was developed by:
         
         // Create the Delete button
         const deleteButton = document.createElement("button");
-        deleteButton.className = "icon-button"; // Add a class for styling
+        deleteButton.className = "icon-button delete-button-click"; // Add a class for styling
         deleteButton.onclick = function() {
             bindingSiteList.removeChild(li);
             removeBindingSite(dataKey); // Ensure this function is implemented to handle backend removal
@@ -1460,6 +1461,23 @@ This module was developed by:
         
         // Append the list item to the binding site list
         bindingSiteList.appendChild(li);
+    }
+    
+    function triggerDeleteButtonClickOnBindingSite(dataKey) {
+        alert(dataKey);
+        const bindingSiteList = document.getElementById("manualBindingSitesList");
+        const items = bindingSiteList.getElementsByTagName("li");
+        alert(items);
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].getAttribute("data-key") === dataKey) {
+                const deleteButton = items[i].querySelector(".delete-button-click");
+                alert(deleteButton);
+                if (deleteButton) {
+                    deleteButton.click();
+                }
+                break;
+            }
+        }
     }
     
     function populateFieldsFromBackendString(dataString) {

@@ -49,6 +49,7 @@ class Config:
     
     def get_output(self):
         if self.check_variable('output'):
+            
             if os.path.exists(self.parameters.parameters['output'].value):
                 self.output = self.parameters.parameters['output'].value
         #self.file += f'output = {self.output}\n'
@@ -164,7 +165,7 @@ class CHEMEM(HtmlToolInstance):
         
         
         
-        self.session.metadata = self
+        #self.session.metadata = self
 
     def run(self):
         chemem_path = self.parameters.parameters['chememBackendPath'].value 
@@ -523,7 +524,9 @@ class Parameters:
             self.parameters[list_name] = [param]
     
     def remove_list_parameter(self, list_name, param_id):
-        self.parameters[list_name] = [i for i in self.parameters[list_name] if  i.name != param_id]
+        
+        if list_name in self.parameters:
+            self.parameters[list_name] = [i for i in self.parameters[list_name] if  i.name != param_id]
         
     def get_list_parameters(self, list_name, param_id):
         if list_name in self.parameters:
@@ -549,16 +552,28 @@ class Parameters:
 
     def get_value(self, parameter):
         return self.parameters[parameter].value
-
+    #housekeeping functions!! 
     def _clear(self):
         self.parameters = {}
     
     def clear(self):
-     retained = ['current_model', 'current_map', 'chememBackendPath']
-     keys_to_delete = [key for key in self.parameters if key not in retained]
-     for key in keys_to_delete:
-         del self.parameters[key]
-
+        retained = ['current_model', 'current_map', 'chememBackendPath']
+        keys_to_delete = [key for key in self.parameters if key not in retained]
+        for key in keys_to_delete:
+            del self.parameters[key]
+    
+    def clear_binding_site_tabs(self, chemem):
+        sites = self.get_parameter('binding_sites')
+        print('CLERAINGSSS')
+        if sites is not None:
+            for site in sites:
+                
+                js_code = f'triggerDeleteButtonClickOnBindingSite("{site.name}");'
+                print(js_code)
+                chemem.run_js_code(js_code)
+                    
+                    
+    
     def copy(self):
         return copy.copy(self)
 
@@ -583,6 +598,7 @@ class Command:
         """Execute the command with provided arguments."""
         
         if command  == cls.__name__:
+            #if True:
             try:
                 cls.run(chemem, query)
             except Exception as e:
@@ -600,6 +616,8 @@ class Command:
 class ResetConfig(Command):
     @classmethod 
     def run(cls, chemem, query):
+        
+        chemem.parameters.clear_binding_site_tabs(chemem)
         chemem.parameters.clear()
 
 class RemoveJob(Command):
@@ -667,8 +685,9 @@ class TransferSiteToConf(Command):
         """
     @classmethod 
     def run(cls, chemem, query):
+        
         site = chemem.parameters.get_list_parameters('binding_sites', query)[0]
-        chemem.parameters.add_list_parameter('binding_sites_conf', site)
+        #chemem.parameters.add_list_parameter('binding_sites_conf', site)
         chemem.run_js_code(cls.js_code(site))
 
 class UpdateExes(Command):
