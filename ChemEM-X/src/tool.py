@@ -164,8 +164,8 @@ class CHEMEM(HtmlToolInstance):
         self.avalible_binding_sites = 0
         
         
-        
-        #self.session.metadata = self
+        #enable for debugging
+        self.session.metadata = self
 
     def run(self):
         chemem_path = self.parameters.parameters['chememBackendPath'].value 
@@ -227,31 +227,33 @@ class CHEMEM(HtmlToolInstance):
             - args[1] : list
                 The list of models involved in the operation.
         """
+        #TODO! refactor-this 
         
         current_map = self.parameters.get_parameter('current_map')
         current_model = self.parameters.get_parameter('current_model')
         #when the removed map or model is the current map or model
         if args[0] == 'remove models':
-           
+            
             if current_model in args[1]:
                 models_left = [i for i in self.session.models if isinstance(i, AtomicStructure) and i not in args[1]]
-                
+                self.clear_binding_site_tabs()
+               
                 if models_left:
                     #if a model still open set this as the current model 
                     UpdateModels.execute(self, 'UpdateModels', '_')
                     self.run_js_code( self.select_model_js( models_left[0] ))
                     return
                 else:
-                    #remove current model and cleanup
-                    
+                    #remove current model and cleanupTODO!         
                     del self.parameters.parameters['current_model']
                     return
-                    #TODO! ADD clean up
+                    
 
             if current_map in args[1]:
+                self.clear_binding_site_tabs()
                 #set current_map to None
                 UpdateMaps.execute(self, 'UpdateMaps', '_')
-                #TODO! clean up 
+                
                 return
         
         if current_map is not None:
@@ -298,7 +300,7 @@ class CHEMEM(HtmlToolInstance):
             self.rendered_site = None 
         
         site = self.parameters.get_list_parameters('binding_sites', key)[0]
-        self.rendered_site =  RenderBindingSite(site, 
+        self.rendered_site =  RenderBindingSite(self.session, site, 
                            self.parameters.parameters['current_model'],
                            self.parameters.get_parameter('current_map'))
         
@@ -334,6 +336,9 @@ class CHEMEM(HtmlToolInstance):
             
         
         return query
+    
+    def clear_binding_site_tabs(self):
+        self.parameters.clear_binding_site_tabs(self)
     
     
 
@@ -564,7 +569,6 @@ class Parameters:
     
     def clear_binding_site_tabs(self, chemem):
         sites = self.get_parameter('binding_sites')
-        print('CLERAINGSSS')
         if sites is not None:
             for site in sites:
                 
@@ -652,10 +656,11 @@ class RemoveBindingSite(Command):
     @classmethod
     def run(cls, chemem, query):
         chemem.parameters.remove_list_parameter('binding_sites', query)
-        
-        if query == chemem.rendered_site.binding_site.name:
-            chemem.rendered_site.reset() 
-            chemem.rendered_site = None
+        #TODO! check the effects of this elsewhere
+        if chemem.rendered_site is not None:
+            if query == chemem.rendered_site.binding_site.name:
+                chemem.rendered_site.reset() 
+                chemem.rendered_site = None
 
 class RemoveBindingSiteFromConf(Command):
     @classmethod
@@ -1037,7 +1042,7 @@ class BindingSiteFromMarker(Command):
                 chemem.parameters.add_list_parameter('binding_sites', site)
                 chemem.current_binding_site_id = site.name 
                 
-                chemem.rendered_site =  RenderBindingSite(site, 
+                chemem.rendered_site =  RenderBindingSite(chemem.session, site, 
                                                           chemem.parameters.parameters['current_model'],
                                                           chemem.parameters.get_parameter('current_map'))
                 
@@ -1070,7 +1075,7 @@ class AddBindingSiteFromInputsOrChange(Command):
         #change or new!!
         if chemem.rendered_site is None:
             query.name = generate_unique_id()
-            chemem.rendered_site =  RenderBindingSite(query, 
+            chemem.rendered_site =  RenderBindingSite(chemem.session, query, 
                                                       chemem.parameters.parameters['current_model'],
                                                       chemem.parameters.get_parameter('current_map'))
 
@@ -1099,7 +1104,7 @@ class RenderBindingSiteFromClick(Command):
         if chemem.rendered_site is not None:
             chemem.rendered_site.reset()
         
-        chemem.rendered_site =  RenderBindingSite(site, 
+        chemem.rendered_site =  RenderBindingSite(chemem.session, site, 
                                                   chemem.parameters.parameters['current_model'],
                                                   chemem.parameters.get_parameter('current_map'))
         chemem.run_js_code(cls.js_code(site))
@@ -1198,10 +1203,11 @@ AutoSite!!
 #║                             Class wrappers                                  ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
 class RenderBindingSite:
-    def __init__(self, binding_site, 
+    def __init__(self, session, 
+                 binding_site, 
                  current_model,
                  current_map = None):
-        
+        self.session = session
         self.binding_site = binding_site 
         self.model = current_model 
         self.map = current_map 
@@ -1226,6 +1232,8 @@ class RenderBindingSite:
         
     def reset_map_region(self):
         self.map.region = self.map.full_region()
+        #call this to change back the box size in chimera
+        self.update_display()
         
     def update_display(self):
         self.map.display = False 
@@ -1262,12 +1270,18 @@ class RenderBindingSite:
             return False
     
     def reset(self):
-        for res in self.model.residues:
-            res.ribbon_display = True
-            for atom in res.atoms:
-                atom.display = False
+        #need to check if the model is within the session
+        
+        #check if the model has been closed first!
+        if self.model in self.session.models:
+            for res in self.model.residues:
+                res.ribbon_display = True
+                for atom in res.atoms:
+                    atom.display = False
+        #check if the map has been closed!
         if self.map is not None:
-            self.reset_map_region()
+            if self.map in self.session.models:
+                self.reset_map_region()
                 
     def update_centroid(self, new_centroid):
         self.binding_site.centroid = new_centroid 

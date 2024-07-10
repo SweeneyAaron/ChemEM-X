@@ -1122,7 +1122,7 @@ This module was developed by:
     
     function updateSelect(elementId, options) {
         const selectElement = document.getElementById(elementId);
-        alert(elementId);
+        
         if (!selectElement) {
             console.error("No select element found with ID:", elementId);
             return;
@@ -1320,7 +1320,7 @@ This module was developed by:
     }   
     
     function saveBindingSite() {
-        alert("Here");
+        
         sendSiteValueToBackend("chemem:SaveSite", "None");
     
     }
@@ -1380,7 +1380,7 @@ This module was developed by:
     //function to add binding site to binding site tab
     function addBindingSiteEntry(siteValue, dataKey) {
         const bindingSiteList = document.getElementById("manualBindingSitesList");
-        alert(dataKey);
+        
         
         // Create the list item
         const li = document.createElement("li");
@@ -1464,14 +1464,14 @@ This module was developed by:
     }
     
     function triggerDeleteButtonClickOnBindingSite(dataKey) {
-        alert(dataKey);
+        
         const bindingSiteList = document.getElementById("manualBindingSitesList");
         const items = bindingSiteList.getElementsByTagName("li");
-        alert(items);
+        
         for (let i = 0; i < items.length; i++) {
             if (items[i].getAttribute("data-key") === dataKey) {
                 const deleteButton = items[i].querySelector(".delete-button-click");
-                alert(deleteButton);
+                
                 if (deleteButton) {
                     deleteButton.click();
                 }
@@ -1485,7 +1485,7 @@ This module was developed by:
         const centroidMatch = dataString.match(/Centroid: \(([^,]+), ([^,]+), ([^\)]+)\)/);
         const boxSizeMatch = dataString.match(/Box Size: \(([^,]+), ([^,]+), ([^\)]+)\)/);
         
-        alert(dataString);
+        
         
         if (centroidMatch && boxSizeMatch) {
             // Extract the centroid values
@@ -1513,7 +1513,7 @@ This module was developed by:
     function updateBindingSiteEntry(siteValue, dataKey) {
         // Find the list item with the corresponding data-key attribute
         const li = document.querySelector(`li[data-key="${dataKey}"]`);
-        alert(dataKey);
+        
         
         // Check if the list item exists
         if (li) {
