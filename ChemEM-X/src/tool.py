@@ -18,8 +18,11 @@ from rdkit import Chem
 import datetime
 import copy 
 import uuid
+
 from chimerax.ChemEM.chemem_job import RealTimeJob, JobHandler
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
+from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid
+
 from chimerax.mouse_modes import MouseMode
 from chimerax.markers import MarkerSet
 from chimerax.ui import HtmlToolInstance
@@ -30,6 +33,8 @@ from chimerax import open_command
 from chimerax.core.commands import run 
 from chimerax.mouse_modes.std_modes import MovePickedModelsMouseMode
 from chimerax.markers.mouse import MoveMarkersPointMouseMode
+
+
 
 class Config:
     
@@ -154,6 +159,7 @@ class CHEMEM(HtmlToolInstance):
         self.view.render()
         self.current_renderd_site_id = None
         self.rendered_site = None
+        self.current_protonation_states = None
         self.current_significant_features_object = None
         self._handler_references = [self.add_model_handeler, 
                                      self.remove_model_handeler, 
@@ -183,6 +189,9 @@ class CHEMEM(HtmlToolInstance):
             handler.remove() 
         
         self._handler_references.clear() 
+        #remove tempory file create by protonation
+        CleanProtonationImage().run(self, None)
+        
         super().delete()
     
     def mkdir(self, path):
@@ -485,6 +494,7 @@ class BindingSiteParameter(Parameter):
             c.centroid = c.value[0]
             c.box_size = c.value[1]
             return c
+    
     @classmethod 
     def get_from_centroid(cls, centroid ,chemem):
         
@@ -513,6 +523,33 @@ class BindingSiteParameter(Parameter):
         return tuple(float(item) for item in split_strings)
         
 #get the bindinsite paramter and the currentbindingsite id
+
+class ProtonationParameter(Parameter):
+    def __init__(self, name, value):
+        self.name = name 
+        self.value = value 
+    
+    @classmethod
+    def get_from_query(cls, query):
+       
+        if query['class'] == cls.__name__:
+            value = cls.get_value(query['value'])
+            c =  cls(query['id'],
+                       value)
+            c.max_pH = value[0]
+            c.min_pH = value[1]
+            c.pka_prec = value[2]
+            c.smiles = query['id']
+            return c
+            
+    @classmethod 
+    def get_value(cls, value):
+        
+        values = value.split('|')
+        #pHmax, pHmin, pka_precsion
+        value = [float(i) for i in values]
+        return value
+        
 
 class Parameters:
     def __init__(self):
@@ -616,6 +653,66 @@ class Command:
     def run(cls, chemem, query):
         """Utility method to run JavaScript code on a given HTML view."""
         pass
+
+class ProtonateSmiles(Command):
+    @classmethod 
+    def js_code(cls, smiles):
+        js_code = f'addSmilesToProtonationList("{smiles}");'
+        return js_code 
+    
+    @classmethod
+    def run(cls,chemem, query):
+        #need to delete the list and images at this stage TODO!
+        chemem.run_js_code("removeAllProtonatedSmiles();")
+        p  = Protonate.from_query(query)
+        p.protonate()
+        
+        for state in p.protonation_states:
+            js_code = cls.js_code(state)
+            chemem.run_js_code(js_code)
+        
+        chemem.current_protonation_states = p
+        
+
+class ShowLigandSmilesImage(Command):
+    
+    @classmethod 
+    def js_code(cls, image_path):
+        js_code = f'displayChemicalStructure("{image_path}");'
+        return js_code
+    
+    @classmethod 
+    def run(cls, chemem, query):
+        
+        if chemem.current_protonation_states is not None:
+            if chemem.current_protonation_states.current_image_file is not None:
+                chemem.current_protonation_states.remove_temporary_file()
+            try:
+                
+                image_idx = chemem.current_protonation_states.protonation_states.index(query)
+                chemem.current_protonation_states.save_image_temporarily(image_idx)
+                file_path = chemem.current_protonation_states.current_image_file.name
+                if file_path is not None:
+                    print('file, ', file_path)
+                    
+                    js_code = cls.js_code(file_path)
+                    chemem.run_js_code(js_code)
+                    
+                    #chemem.current_protonation_states.remove_temporary_file()
+            except ValueError:
+                js_code = f'alert("Smiles image not found {query}");'
+                chemem.run_js_code(js_code)
+                
+            print(query, image_idx)
+            print(chemem.current_protonation_states.protonation_states[image_idx])
+            print(chemem.current_protonation_states.images[image_idx])
+
+class CleanProtonationImage(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.current_protonation_states is not None:
+            if chemem.current_protonation_states.current_image_file is not None:
+                chemem.current_protonation_states.remove_temporary_file()
 
 class ResetConfig(Command):
     @classmethod 

@@ -347,7 +347,35 @@ This module was developed by:
             border-top: none;
         }
         
-        #manualBindingSitesList {
+        #manualBindingSitesList, #protonatedSmilesList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        #manualBindingSitesList li, #protonatedSmilesList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover {
+            background-color: #e9eef7;
+        }
+        
+        #manualBindingSitesList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        #manualBindingSitesList { 
             list-style-type: none;
             padding: 8px;
             max-height: 100px;
@@ -599,7 +627,37 @@ This module was developed by:
         #threshold-value {
             margin-left: 10px; /* Adjust the space between label and value as needed */
         }
-
+        
+        #chemical-structure fieldset {
+            display: flex;              /* Use flexbox for easy centering */
+            justify-content: center;    /* Center content horizontally */
+            align-items: center;        /* Center content vertically */
+            height: 300px;              /* Set a specific height or make it responsive as needed */
+            margin: auto;               /* Center the fieldset itself if necessary */
+            text-align: center;         /* Ensures text and inline-elements are centered */
+        }
+        
+        #chemical-structure img {
+            max-width: 100%;            /* Image can scale up to 100% of its container */
+            max-height: 100%;           /* Limits the image height to the container */
+            height: auto;               /* Maintain aspect ratio */
+            width: auto;                /* Maintain aspect ratio */
+        }
+        
+        .pH-group {
+            display: flex;
+            justify-content: space-between; /* This will distribute spacing evenly between the items */
+            align-items: center; /* This will vertically align the items in the middle */
+            margin-bottom: 20px; /* Provide some space below this group */
+        }
+        
+        .pH-group label, .pH-group input {
+            margin-right: 10px; /* Space between label and input and between each group */
+        }
+        
+        .pH-group input {
+            width: 100px; /* Ensures all inputs are the same width */
+        }
         
     </style>
 </head>
@@ -612,6 +670,7 @@ This module was developed by:
     <!-- Tab Links -->
     <div class="tab">
         <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'QuickConfigTab')">Quick Config</button>
+        <button class="tablinks" onclick="openTab(event, 'LigandsTab')">Ligands</button>
         <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Site</button>
         <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
         <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs</button>
@@ -918,6 +977,50 @@ This module was developed by:
     </div><!-- end of tab -->
     
     
+    <div id="LigandsTab" class="tabcontent">
+    <div class="container" id="ligandcontent">
+        <legend>Protonate Ligands</legend>
+            
+            
+            <div class="form-group pH-group">
+                <label for="pHMax">pH max:</label>
+                <input type="number" id="pHMax" name="pHMax" step="0.01" value="8.4" style="width: 100px;">
+        
+                <label for="pHMin">pH min:</label>
+                <input type="number" id="pHMin" name="pHMin" step="0.01" value="6.4" style="width: 100px;">
+        
+                <label for="pHSTD">pKa Precision:</label>
+                <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" style="width: 100px;">
+            </div>
+            <!-- Ligand SMILES input with Add button -->
+            <div class="form-group input-with-button">
+                <label for="ligandSmilesForProtonation">Ligand SMILES:</label>
+                <input type="text" id="ligandSmilesForProtonation" name="ligandSmilesForProtonation" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                <button type="button" class="add-button" onclick="ProtonateLigand()">Protonate</button>
+            </div>
+            
+    </div>
+    
+    <div class="container" id="chemical-structure">
+        
+        <fieldset>
+        
+            <legend>Chemical Structure</legend>
+            
+        
+        </fieldset>
+    </div>
+    
+    <div class="container" id="protonation-states">
+    <fieldset>
+        <legend>Protonation States</legend>
+        <label style="font-weight: bold;">Protonated SMILES:</label>
+        <ul id="protonatedSmilesList"></ul>
+    </fieldset>
+    </div>
+</div><!-- end of tab -->
+
+    
     <div id="JobsTab" class="tabcontent">
         <div class="container" id="jobcontent">
             <legend>Submitted Jobs</legend>
@@ -985,6 +1088,7 @@ This module was developed by:
                 </div>
             </fieldset>
         </div>
+        
         
         <div class="container" id="manual-binding-site">
             
@@ -1261,6 +1365,150 @@ This module was developed by:
         
     }
     
+    function removeAllProtonatedSmiles() {
+        // Get the unordered list element by its ID
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Remove all child <li> elements
+        while (list.firstChild) {
+            list.removeChild(list.firstChild);
+        }
+        sendSiteValueToBackend("chemem:CleanProtonationImage", "None");
+    }
+
+    
+    function ProtonateLigand() {
+        
+        var phmax = document.getElementById("pHMax").value; 
+        var phmin = document.getElementById("pHMin").value; 
+        var phstd = document.getElementById("pHSTD").value;
+        
+        if (!phmax) {
+            phmax = 8.4;
+        }
+        if (!phmin) {
+            phmin = 6.4;
+        }
+        if (!phstd) {
+            phstd = 1.0;
+        }
+        
+        
+        const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string provided.");
+            return;
+        }
+        
+        var siteValue = `${phmax} | ${phmin} | ${phstd}`;
+        sendParameterToBackend("chemem:ProtonateSmiles", smilesString, siteValue, "ProtonationParameter");
+        document.getElementById("ligandSmilesForProtonation").value = '';
+    }
+    
+    function addSmilesToProtonationList(smiles) {
+        if (!smiles) {
+            alert("No SMILES string provided.");
+            return;
+        }
+    
+        // Find the unordered list where the SMILES will be added
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Create a new list item
+        const listItem = document.createElement('li');
+    
+        // Add the SMILES string as text content of the list item
+        listItem.textContent = smiles;
+        
+        
+        
+         
+         const addButton = document.createElement("button");
+         addButton.className = "icon-button"; // Add a class for styling
+         addButton.onclick = function() {
+             
+             ligandIdCounter++;
+             const className = "SmilesParameter"; // Static for now, change as needed
+             const ligandData = {
+                 id: ligandIdCounter,
+                 value: smiles,
+                 class: className
+             };
+             sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData);
+             addLigandToList(ligandData);
+             
+         };
+         
+         const addIcon =  document.createElement("img");
+         addIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/add.svg"; 
+         addIcon.alt = "Add";
+         addIcon.className = "icon";
+         addButton.appendChild(addIcon)
+        
+    
+        // Create the View button
+        const viewButton = document.createElement("button");
+        addButton.className = "icon-button"; 
+        viewButton.onclick = function() {
+            
+            sendSiteValueToBackend("chemem:ShowLigandSmilesImage", smiles);
+        };
+        const viewIcon =  document.createElement("img");
+        viewIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/view.svg";
+        viewIcon.alt = "View";
+        viewIcon.className = "icon";
+        viewButton.appendChild(viewIcon);
+        
+        
+        
+        
+        // Append the buttons to the list item
+        listItem.appendChild(addButton);
+        listItem.appendChild(viewButton);
+    
+        // Append the list item to the unordered list
+        list.appendChild(listItem);
+    }
+    
+    function displayChemicalStructureOld(imagePath) {
+        // Get the container where the image should be displayed
+        const container = document.querySelector("#chemical-structure fieldset");
+        
+        // Check if an image already exists
+        let img = container.querySelector("img");
+        
+        if (!img) {
+            // Create a new img element if it does not exist
+            img = document.createElement("img");
+            container.appendChild(img);
+        }
+    
+        // Set the image source to the provided path
+        img.src = imagePath;
+        img.alt = "Chemical Structure";
+        img.style.width = "100%"; // Set the width of the image to fit the container
+        img.style.maxWidth = "300px"; // Optionally, limit the maximum width
+        img.style.height = "auto"; // Maintain the aspect ratio
+    }
+    
+    function displayChemicalStructure(imagePath) {
+        // Get the container where the image should be displayed
+        const container = document.querySelector("#chemical-structure fieldset");
+        
+        // Check if an image already exists
+        let img = container.querySelector("img");
+        
+        if (!img) {
+            // Create a new img element if it does not exist
+            img = document.createElement("img");
+            container.appendChild(img);
+        }
+    
+        // Set the image source to the provided path
+        img.src = imagePath;
+        img.alt = "Chemical Structure";
+        // Inline styles removed since CSS will handle the image sizing and centering
+    }
     
     function addCentroid() {
         var x = document.getElementById("centroidX").value;
@@ -1306,6 +1554,8 @@ This module was developed by:
             alert('Please fill in all fields.');
         }
     }
+    
+    
     
     function removeBindingSiteFromConf(key) {
         sendSiteValueToBackend("chemem:RemoveBindingSiteFromConf", key);
