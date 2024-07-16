@@ -21,7 +21,7 @@ import uuid
 
 from chimerax.ChemEM.chemem_job import RealTimeJob, JobHandler
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
-from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid
+from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap
 
 from chimerax.mouse_modes import MouseMode
 from chimerax.markers import MarkerSet
@@ -161,6 +161,7 @@ class CHEMEM(HtmlToolInstance):
         self.rendered_site = None
         self.current_protonation_states = None
         self.current_significant_features_object = None
+        self.current_loaded_result = None
         self._handler_references = [self.add_model_handeler, 
                                      self.remove_model_handeler, 
                                      self.moved_model_handeler]
@@ -639,20 +640,197 @@ class Command:
         """Execute the command with provided arguments."""
         
         if command  == cls.__name__:
-            #if True:
-            try:
+            if True:
+            #try:
                 cls.run(chemem, query)
-            except Exception as e:
-                alert_message = f'ChemEM Error, unable to run command: {cls.__name__} - {e}'
-                print(alert_message)
-                js_code = f'alert("{alert_message}");'
-                chemem.run_js_code(js_code)
+            #except Exception as e:
+            #    alert_message = f'ChemEM Error, unable to run command: {cls.__name__} - {e}'
+            #    print(alert_message)
+            #    js_code = f'alert("{alert_message}");'
+            #    chemem.run_js_code(js_code)
                 
     
     @classmethod
     def run(cls, chemem, query):
         """Utility method to run JavaScript code on a given HTML view."""
         pass
+
+
+class LoadChimeraXJob(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if query in chemem.job_handeler.jobs:
+            job = chemem.job_handeler.jobs[query]
+            path = PathParameter('loadJob', job.parameters.output)
+            chemem.parameters.add(path)
+            LoadJobFromPath().run(chemem,query)
+            
+            
+            
+class LoadJobFromPath(Command):
+    @classmethod
+    def run(cls, chemem, query):
+        #removed currently loaded job 
+        if chemem.current_loaded_result is not None:
+            
+            js_code =  'clearResultsLists();'
+            chemem.run_js_code(js_code)
+            chemem.current_loaded_result.clear()
+            chemem.current_loaded_result = None
+            
+            
+        load_path = chemem.parameters.get_parameter('loadJob')
+        #check what data is avalible 
+        preprocessing_path = os.path.join( load_path.value, 'preprocessing')
+        fitting_path = os.path.join( load_path.value, 'fitting')
+        postprocessing_path = os.path.join( load_path.value, 'post_processing')
+        
+        #preprocessing files 
+        if os.path.exists( preprocessing_path ):
+
+            pre_processed_map_files = [i for i in os.listdir(preprocessing_path) if i.endswith('.mrc')]
+            
+        else:
+            pre_processed_map_files = []
+        
+        
+        #fitting files
+        if os.path.exists( fitting_path ):
+            
+            sdf_files = [i for i in os.listdir(fitting_path) if i.endswith('.sdf')]
+            fitting_results_path = os.path.join(fitting_path, 'results.txt')
+            
+
+            if os.path.exists( os.path.join(fitting_path, 'PDB')):
+                pdb_path =  os.path.join(fitting_path, 'PDB')
+                pdb_files = [i for i in os.listdir(pdb_path) if i.endswith('.pdb')]
+            else:
+                pdb_files = None
+            
+            if sdf_files and pdb_files is not None:
+                
+                fitting_file_pairs = cls.pair_files_fitting(pdb_files, sdf_files)
+        else:
+            fitting_file_pairs = []
+            fitting_results_path = os.path.join(fitting_path, 'results.txt')
+                
+
+        #post-processing_files
+        
+        if os.path.exists(postprocessing_path):
+            pdb_files = [i for i in os.listdir(postprocessing_path) if i.endswith('.pdb')]
+            sdf_files = [i for i in os.listdir(postprocessing_path) if i.endswith('.sdf')]
+            
+            if sdf_files and pdb_files:
+                postproc_file_pairs = cls.pair_files_postproc(pdb_files, sdf_files)
+            
+            post_proc_results_path = os.path.join(postprocessing_path, 'results.txt')
+            
+        
+        else:
+            postproc_file_pairs = []
+            post_proc_results_path = os.path.join(postprocessing_path, 'results.txt')
+        
+        results_object = ChemEMResult( chemem.session, 
+                                       preprocessing_path,
+                                       pre_processed_map_files,
+                                       fitting_path,
+                                       fitting_file_pairs,
+                                       fitting_results_path,
+                                       postprocessing_path,
+                                       postproc_file_pairs,
+                                       post_proc_results_path
+                                      )
+        
+        chemem.current_loaded_result = results_object
+        for message in chemem.current_loaded_result.messages:
+            chemem.run_js_code(message)
+    
+            
+    @classmethod 
+    def pair_files_fitting(cls, pdb_files, sdf_files):
+        fitting_file_pairs = []
+        
+        for pdb in pdb_files:
+            pdb_id = pdb.split('_')[1].replace('.pdb', '')
+            pair = [pdb]
+            for sdf in sdf_files:
+                sdf_id = sdf.split('_')[1] 
+                if pdb_id == sdf_id:
+                    pair.append(sdf)
+            
+            fitting_file_pairs.append(pair)
+            
+        return fitting_file_pairs
+    
+    @classmethod 
+    def pair_files_postproc(cls, pdb_files, sdf_files):
+        fitting_file_pairs = []
+        
+        for pdb in pdb_files:
+            pdb_id = pdb.split('_')[1].replace('.pdb', '')
+            pdb_cycle_id =  pdb.split('_')[3].replace('.pdb', '')
+            pair = [pdb]
+            for sdf in sdf_files:
+                sdf_id = sdf.split('_')[1] 
+                sdf_cycle_id =  sdf.split('_')[3] 
+                if pdb_id == sdf_id and pdb_cycle_id == sdf_cycle_id:
+                    pair.append(sdf)
+            
+            fitting_file_pairs.append(pair)
+            
+        return fitting_file_pairs
+
+
+class HideSolutionMap(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        query = str(query)
+        if chemem.current_loaded_result is not None:
+            
+            for density_map in chemem.current_loaded_result.map_objects:
+                if density_map.id == query:
+                    density_map.hide()
+        
+
+class ViewSolutionMap(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        query = str(query)
+        if chemem.current_loaded_result is not None:
+            
+            for density_map in chemem.current_loaded_result.map_objects:
+                if density_map.id == query:
+                    density_map.show()
+        
+class ViewFittingSolutionMap(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.current_loaded_result is not None:
+            for solution in chemem.current_loaded_result.fitting_results:
+                if solution.id == query:
+                    solution.show_solution()
+                    return
+            for solution in chemem.current_loaded_result.postprocessing_results:
+                if solution.id == query:
+                    solution.show_solution()
+                    return
+
+class HideFittingSolutionMap(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.current_loaded_result is not None:
+            for solution in chemem.current_loaded_result.fitting_results:
+                if solution.id == query:
+                    solution.hide_solution()
+                    return
+        
+            for solution in chemem.current_loaded_result.postprocessing_results:
+                if solution.id == query:
+                    solution.hide_solution()
+                    return
+            
+
 
 class ProtonateSmiles(Command):
     @classmethod 

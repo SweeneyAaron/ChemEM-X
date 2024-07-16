@@ -347,7 +347,7 @@ This module was developed by:
             border-top: none;
         }
         
-        #manualBindingSitesList, #protonatedSmilesList {
+        #manualBindingSitesList, #protonatedSmilesList , #preprocMapsList, #postprocMapsList, #fittingMapsList {
             list-style-type: none;
             padding: 8px;
             max-height: 100px;
@@ -358,7 +358,7 @@ This module was developed by:
             background-color: #f8f8f8;
         }
         
-        #manualBindingSitesList li, #protonatedSmilesList li {
+        #manualBindingSitesList li, #protonatedSmilesList li, #preprocMapsList li, #postprocMapsList li, #fittingMapsList li {
             cursor: default;
             padding: 5px;
             border-bottom: 1px solid #e1e1e1;
@@ -367,7 +367,7 @@ This module was developed by:
             justify-content: space-between;
         }
         
-        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover {
+        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover, #preprocMapsList li:hover, #postprocMapsList li:hover, #fittingMapsList li:hover {
             background-color: #e9eef7;
         }
         
@@ -674,7 +674,7 @@ This module was developed by:
         <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Site</button>
         <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
         <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs</button>
-        <button class="tablinks" >Results</button>
+        <button class="tablinks" onclick="openTab(event, 'ResultsTab')">Results</button>
         <button class="tablinks" >Post-processing</button>
         <!--<button class="tablinks" >Ligand Interactions</button> -->
     </div>
@@ -860,7 +860,7 @@ This module was developed by:
             <div class="form-group">
                 <label class="checkbox-label">
                     Post Process
-                    <input type="checkbox" id="postprocess" name="postprocess">
+                    <input type="checkbox" id="post_process" name="post_process">
                     <span class="checkmark"></span>
                 </label>
             </div>
@@ -1019,29 +1019,6 @@ This module was developed by:
     </fieldset>
     </div>
 </div><!-- end of tab -->
-
-    
-    <div id="JobsTab" class="tabcontent">
-        <div class="container" id="jobcontent">
-            <legend>Submitted Jobs</legend>
-            <div id="jobListContainer">
-                <ul id="jobList"></ul>
-            </div>
-        </div>
-        
-        <div class="container" id="loadJobFromDir">
-            <fieldset>
-                <legend>Load Results</legend>
-                    <div class="form-group file-input-group">
-                        <label for="loadJob">Results directory:</label>
-                        <button type="button" class="dialog-button" id="loadJob" onclick="setDir('loadJob')">Choose Folder</button>
-                        <span class="file-path" id="loadJobPath"></span>
-                    </div>
-                    <button type="button" class="add-button">Load</button>  
-            </fieldset>
-        </div>
-    </div><!-- end of tab -->
-    
     
     <div id="BindingSiteTab" class="tabcontent">
         <div class="container" id="manual-binding-site">
@@ -1167,11 +1144,51 @@ This module was developed by:
             <label style="font-weight: bold;">Algorithm</label>
         </fieldset>
     </div>
+    
 </div><!-- end of tab -->
 
+    <div id="JobsTab" class="tabcontent">
+        <div class="container" id="jobcontent">
+            <legend>Submitted Jobs</legend>
+            <div id="jobListContainer">
+                <ul id="jobList"></ul>
+            </div>
+        </div>
+        
+        <div class="container" id="loadJobFromDir">
+            <fieldset>
+                <legend>Load Results</legend>
+                    <div class="form-group file-input-group">
+                        <label for="loadJob">Results directory:</label>
+                        <button type="button" class="dialog-button" id="loadJob" onclick="setDir('loadJob')">Choose Folder</button>
+                        <span class="file-path" id="loadJobPath"></span>
+                    </div>
+                    <button type="button" class="load-button" onclick="loadJobFromPath()">Load</button>  
+            </fieldset>
+        </div>
+    </div><!-- end of tab -->
 
-    
-    
+     <div id="ResultsTab" class="tabcontent">
+          <div class="container" id="preprocResultsContent">
+              <legend>Pre-Processing Results</legend>
+              <label style="font-weight: bold;">Map Files</label>
+              <ul id="preprocMapsList"></ul>
+          </div>
+          
+          <div class="container" id="postprocResultsContent">
+              <legend>Post-Processing Results</legend>
+              <label style="font-weight: bold;">Solutions</label>
+              <ul id="postprocMapsList"></ul>
+          </div>
+          
+          <div class="container" id="fittingResultsContent">
+              <legend>Fitting Results</legend>
+              <label style="font-weight: bold;">Solutions</label>
+              <ul id="fittingMapsList"></ul>
+          </div>
+          
+     </div><!-- end of tab -->
+
     <script>
     let ligandIdCounter = 0;
     let bindingSiteCounter = 0;
@@ -1282,6 +1299,13 @@ This module was developed by:
     
     function setFilePath( elementId, file){
         document.getElementById(elementId).textContent = file;
+    }
+    
+    function loadJobFromPath() {
+        setDir('loadJob');
+        sendSiteValueToBackend("chemem:LoadJobFromPath", "None");
+        openTab(event, 'ResultsTab');
+    
     }
     
     
@@ -1660,7 +1684,7 @@ This module was developed by:
         const addButton = document.createElement("button");
         addButton.className = "icon-button"; // Add a class for styling
         addButton.onclick = function() {
-            alert(`Additional functionality for: ${siteValue}`);
+            
             sendSiteValueToBackend("chemem:TransferSiteToConf", dataKey)
             // Add additional functionality here
         };
@@ -1952,7 +1976,10 @@ This module was developed by:
         loadBtn.className = 'load-btn';
         loadBtn.textContent = "Load";
         loadBtn.onclick = function () {
-            alert(`Loading details for Job ID: ${jobId}`);
+            sendSiteValueToBackend("chemem:LoadChimeraXJob", jobId); 
+            openTab(event, 'ResultsTab');
+            
+            
             // You can add more logic to load specific job details here
         };
     
@@ -2122,6 +2149,88 @@ This module was developed by:
             ul.removeChild(ul.firstChild);
         }
     }
+    
+    
+    //load job functions
+    function addLoadMapItem(name, id) {
+        // Create the li element
+        const li = document.createElement('li');
+        li.textContent = name;
+        li.setAttribute('data-id', id);
+
+        // Create the button element
+        const button = document.createElement('button');
+        button.textContent = 'Hide';
+        button.addEventListener('click', function () {
+            if (button.textContent === 'View') {
+                viewFunction(id);
+                button.textContent = 'Hide';
+            } else {
+                hideFunction(id);
+                button.textContent = 'View';
+            }
+        });
+
+        // Append the button to the li
+        li.appendChild(button);
+
+        // Append the li to the ul
+        const ul = document.getElementById('preprocMapsList');
+        ul.appendChild(li);
+    }
+
+    function viewFunction(id) {
+        sendSiteValueToBackend("chemem:ViewSolutionMap", id);
+    }
+
+    function hideFunction(id) {
+        sendSiteValueToBackend("chemem:HideSolutionMap", id);
+    }
+    
+    function addLoadFittingSolution(data, id, list) {
+        const li = document.createElement('li');
+        li.textContent = data;
+        li.setAttribute('data-id', id);
+        
+        const button = document.createElement('button');
+        button.textContent = 'View';
+        button.addEventListener('click', function () {
+            if (button.textContent == 'View') {
+                viewFittingFunction(id);
+                button.textContent = 'Hide';
+            } else {
+                hideFittingFunction(id);
+                button.textContent = 'View';
+            }
+        });
+        
+        li.appendChild(button);
+        const ul = document.getElementById(list);
+        ul.appendChild(li);
+    }
+    
+    function viewFittingFunction(id) {
+        sendSiteValueToBackend("chemem:ViewFittingSolutionMap", id);
+    }
+
+    function hideFittingFunction(id) {
+        sendSiteValueToBackend("chemem:HideFittingSolutionMap", id);
+    }
+    
+    function clearResultsLists() {
+        const lists = ['#preprocMapsList', '#postprocMapsList', '#fittingMapsList'];
+        
+        lists.forEach(function(listId) {
+            const ul = document.querySelector(listId);
+            if (ul) {
+                alert("found ul")
+                ul.innerHTML = '';
+            }
+        });
+    }
+   
+   
+   
    
    document.addEventListener('DOMContentLoaded', function() {
    
