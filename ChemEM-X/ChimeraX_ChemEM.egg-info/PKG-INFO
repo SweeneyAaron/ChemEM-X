@@ -22,6 +22,8 @@ Classifier: Operating System :: POSIX :: Linux
 Classifier: ChimeraX :: Bundle :: Structure Prediction :: 1,1 :: chimerax.ChemEM ::  :: 
 Classifier: ChimeraX :: Tool :: ChemEM :: Structure Prediction :: model ligands in cryo-EM maps
 Requires-Python: >=3.7
+Requires-Dist: ChimeraX-Core~=1.1
+Requires-Dist: scikit-spatial==7.0
 
 ProPLID
 

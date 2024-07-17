@@ -18,8 +18,10 @@ from rdkit import Chem
 import datetime
 import copy 
 import uuid
+import threading
+import time
 
-from chimerax.ChemEM.chemem_job import RealTimeJob, JobHandler
+from chimerax.ChemEM.chemem_job import  JobHandler, LocalChemEMJob
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
 from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap
 
@@ -28,6 +30,7 @@ from chimerax.markers import MarkerSet
 from chimerax.ui import HtmlToolInstance
 from chimerax.atomic.structure import AtomicStructure
 from chimerax.core.models import ADD_MODELS, REMOVE_MODELS, MODEL_POSITION_CHANGED
+from chimerax.core.tasks import ADD_TASK, REMOVE_TASK
 from chimerax.map import Volume
 from chimerax import open_command
 from chimerax.core.commands import run 
@@ -136,7 +139,7 @@ class Config:
         self.get_binding_sites()
         self.get_parameters()
         self.write_file()
-        print(self.file)
+        print(self.file) #TODO! for debuging!!
         
 
 class CHEMEM(HtmlToolInstance):
@@ -155,6 +158,8 @@ class CHEMEM(HtmlToolInstance):
         self.add_model_handeler = self.session.triggers.add_handler(ADD_MODELS, self.update_models)
         self.remove_model_handeler = self.session.triggers.add_handler(REMOVE_MODELS, self.update_models)
         self.moved_model_handeler = self.session.triggers.add_handler(MODEL_POSITION_CHANGED, self.model_position_changed)
+        #self.job_added_task = self.session.triggers.add_handler(ADD_TASK, self.add_task)
+        self.job_remove_task =  self.session.triggers.add_handler(REMOVE_TASK, self.remove_task)
         self.job_handeler = JobHandler()
         self.view.render()
         self.current_renderd_site_id = None
@@ -164,7 +169,8 @@ class CHEMEM(HtmlToolInstance):
         self.current_loaded_result = None
         self._handler_references = [self.add_model_handeler, 
                                      self.remove_model_handeler, 
-                                     self.moved_model_handeler]
+                                     self.moved_model_handeler,
+                                     self.job_remove_task]
         
         self.avalible_chemem_exes =  get_chemem_paths()
         #remove!!
@@ -172,18 +178,83 @@ class CHEMEM(HtmlToolInstance):
         
         
         #enable for debugging
+        #TODO!
         self.session.metadata = self
-
+        
+    
+    def remove_task(self, *args):
+        
+        if args[1].success:
+            js_code = f'updateJobStatus( {args[1].id}, "Completed");'
+        else:
+            js_code = f'updateJobStatus( {args[1].id}, "Failed");'
+        self.run_js_code(js_code)
+        
+        
+    def add_task(self, *args):
+        js_code = 'alert("JobAdded");'
+        self.run_js_code(js_code)
+  
+    def openmm_test_run(self):
+        import parmed
+        from openmm import XmlSerializer
+        from openmm import LangevinIntegrator, Platform
+        from openmm import app
+        from openmm import unit
+        
+        import chimerax 
+        openmm_plugins_dir = os.path.join(chimerax.app_lib_dir, 'plugins')
+        Platform.loadPluginsFromDirectory(openmm_plugins_dir)
+        avalible_platforms = []
+        for i in range(Platform.getNumPlatforms()):
+            avalible_platforms.append(Platform.getPlatform(i).getName())
+        
+        self.platforms = avalible_platforms
+        
+        with open('/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_system.xml', 'r') as file:
+            complex_system = XmlSerializer.deserialize(file.read())
+            
+        cp1 = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_structure.prmtop'
+        cp2 = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_structure.inpcrd'
+        complex_structure = parmed.load_file(cp1, xyz=cp2)
+        
+        self.complex_system = complex_system
+        self.complex_structure = complex_structure
+        
+        #complex_system.getForce(pin_idx).setForceGroup(force_group)
+        
+        integrator = LangevinIntegrator(300*unit.kelvin, 1.0/unit.picoseconds,
+                                        1.0*unit.femtoseconds)
+        
+        _platform = Platform.getPlatformByName('OpenCL')
+        
+        
+        simulation = app.Simulation(
+            complex_structure.topology, complex_system, integrator, platform=_platform)
+        
+        simulation.context.setPositions(complex_structure.positions)
+        self.simulation = simulation
+        
     def run(self):
         chemem_path = self.parameters.parameters['chememBackendPath'].value 
         conf_file_path = self.conf_handler.file_path 
         command = f"{chemem_path} {conf_file_path}"
-        job = RealTimeJob(self.session, command, self.conf_handler, self.html_view)
-        job.start()        
-
+        
+        job = LocalChemEMJob(self.session, command, self.conf_handler)
+        
+        job_data = {
+            "id": job.id,
+            "status": "running",
+        }
+        
+        job_data_json = json.dumps(job_data)
+        js_code = f"addJob({job_data_json});"
+        self.run_js_code(js_code)
+        job.start()    
         js_code = "resetQuickConfigTab();"
         self.run_js_code(js_code)
-        self.job_handeler.add_job(job)
+        self.job_handeler.add_job(job) # used for loading completed jobs!!
+        
     
     def delete(self):
         for handler in self._handler_references:
@@ -192,7 +263,6 @@ class CHEMEM(HtmlToolInstance):
         self._handler_references.clear() 
         #remove tempory file create by protonation
         CleanProtonationImage().run(self, None)
-        
         super().delete()
     
     def mkdir(self, path):
@@ -217,6 +287,7 @@ class CHEMEM(HtmlToolInstance):
  
         
     def run_js_code(self, js_code):
+       
         self.html_view.page().runJavaScript(js_code)
     
     
@@ -661,7 +732,7 @@ class LoadChimeraXJob(Command):
     def run(cls, chemem, query):
         if query in chemem.job_handeler.jobs:
             job = chemem.job_handeler.jobs[query]
-            path = PathParameter('loadJob', job.parameters.output)
+            path = PathParameter('loadJob', job.params.output)
             chemem.parameters.add(path)
             LoadJobFromPath().run(chemem,query)
             
@@ -1259,8 +1330,11 @@ class SaveConfFile(Command):
 class RunChemEM(Command):
     @classmethod 
     def run(cls, chemem, query):
+        
         chemem.make_conf_file()
         chemem.run()
+
+
 
 
 

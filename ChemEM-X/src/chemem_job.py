@@ -7,46 +7,45 @@
 
 
 import subprocess
-from chimerax.core.tasks import Job
+from chimerax.core.tasks import Job, Task, TaskState
 import json
+import datetime
 
 
-class RealTimeJob(Job):
-    """
-    A ChimeraX job that executes a specified shell command and monitors its output in real-time.
-    """
+
+class LocalChemEMJob(Task):
     
-    def __init__(self, session, command, params, html_view):
+    def __init__(self, session, command, params):
         super().__init__(session)
-        self.command = command
-        self.parameters = params
-        self.html_view = html_view
-        self.status = "pending"
+        self.command = command 
+        self.params = params
         self.log_file = []
-        
-    def run(self):
-        """
-        Execute the command and monitor its output in real-time.
-        """
-        self.add_job_to_frontend()
-        success = self.execute_command()
-        self.on_finish(success)  # Ensure on_finish is called regardless of outcome
-        self.terminate()
+    #possible you need to add terminate to cleanup threads?
+    #self._thread.join() wait for the thread to finish??
     
-    def add_job_to_frontend(self):
-        
-        job_data = {
-            "id": self.id,
-            "status": "running",
-        }
-        job_data_json = json.dumps(job_data)
-        js_code = f"addJob({job_data_json});"
-        self.run_js_code(js_code)
+    def terminate(self):
+        """Terminate this task.
 
-    
-    def execute_command(self):
+        This method should be overridden to clean up
+        task data structures.  This base method should be
+        called as the last step of task deletion.
+
         """
-        Execute the specified shell command and monitor output in real-time.
+        self.session.tasks.remove(self)
+        self.end_time = datetime.datetime.now()
+        
+        if self._terminate is not None:
+            self._terminate.set()
+            
+        self.state = TaskState.TERMINATING
+    
+    def run(self, *args, **kw):
+        """Run the task.
+
+        This method must be overridden to implement actual functionality.
+        :py:meth:`terminating` should be checked regularly to see whether
+        user has requested termination.
+
         """
         try:
             self.process = subprocess.Popen(self.command, shell=True, text=True,
@@ -60,7 +59,8 @@ class RealTimeJob(Job):
                 if err:
                     self.log_file.append(f"Error: {err.strip()}\n")
                     self.thread_safe_error(f"Error: {err.strip()}")
-                    return False
+                    self.success = False
+                    return 
             finally:
                 # Properly close stdout and stderr
                 self.process.stdout.close()
@@ -71,49 +71,38 @@ class RealTimeJob(Job):
             if self.process.returncode != 0:
                 self.log_file.append(f"Process exited with code {self.process.returncode}\n")
                 self.thread_safe_error(f"Process exited with code {self.process.returncode}")
-                return False
-            return True
+                self.success = False
+                return 
+            self.success = True
+            return 
 
         except Exception as e:
             self.log_file.append(f"Exception while executing command: {e}\n")
             self.thread_safe_error(f"Exception while executing command: {e}")
-            return False
+            self.success = False
+            return 
+    
+    def on_finish(self):
+        """Callback method executed after task thread terminates.
 
+        This callback is executed in the UI thread after the
+        :py:meth:`run` method returns.  By default, it does nothing.
 
+        """
+        self.terminate()
+        
+    
     def cancel_job(self):
         """
         Cancels the running job if possible.
         """
-        print('CANCELING JOB')
+        
         if self.process and self.process.poll() is None:
             self.process.terminate()  # Sends SIGTERM
-            self.process.wait()  # Wait for the process to terminate
-            #js_code = f'updateJobStatus({self.id}, "Cancelled");'
-            #self.run_js_code(js_code)
+            self.process.wait()
+            self.terminate()
     
-    def run_js_code(self, js_code):
-        self.html_view.page().runJavaScript(js_code)
     
-    def on_finish(self, success):
-        """
-        Handles completion of the job, updating the front-end based on whether the job
-        was successful or not.
-        """
-        if success:
-            #js_code = "alert('Job completed successfully.');"
-            js_code = f'updateJobStatus( {self.id}, "Completed");'
-        
-        else:
-            #js_code = "alert('Job failed.');"
-            js_code = f'updateJobStatus( {self.id}, "Failed");'
-        
-        self.run_js_code(js_code)
-        #TODO! write log file
-        #log_file_name = os.path.join()
-        
-    def __str__(self):
-        return f"RealTimeJob, ID {self.id}, Command: {self.command}"
-
 
 class JobHandler:
     def __init__(self):
@@ -143,6 +132,6 @@ class JobHandler:
     def get_job_status(self, job_id):
         """ Returns the status of a specific job. """
         if job_id in self.jobs:
-            return self.jobs[job_id].state
+            return self.jobs[job_id].status
         return None
 

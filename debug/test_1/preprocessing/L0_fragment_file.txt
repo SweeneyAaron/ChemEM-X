@@ -1,0 +1,10 @@
+CCC
+	Fragment_index: 0, Atom_key: L0:1.0.2 
+CCO
+	Fragment_index: 1, Atom_key: L0:4.5.6 
+[O-]c1ccccc1[O-]
+	Fragment_index: 2, Atom_key: L0:7.8.9.10.11.12.13.14 
+[NH2+]CCO
+	Fragment_index: 3, Atom_key: L0:3.4.5.6 
+CC(C)[NH2+]
+	Fragment_index: 4, Atom_key: L0:3.1.0.2 

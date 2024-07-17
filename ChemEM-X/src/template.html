@@ -1944,44 +1944,49 @@ This module was developed by:
         evt.currentTarget.className += " active";
     }
     
+    
+    function test_alert() {
+        alert('TestAlert');
+    
+    }
     // Function to add a job
     function addJob(jobData) {
-        // Extract job properties from the incoming data
+        
+        
         const { id, status } = jobData;
-    
-        // Increment a unique identifier counter if needed, otherwise use the provided job ID
         const jobId = id;
-    
-        // Get the job list element from the DOM
         const jobList = document.getElementById("jobList");
-    
+        if (!jobList) {
+            alert("Failed to find the job list element.");
+            return; 
+        }
+        
         // Create a new list item to represent the job
         const li = document.createElement("li");
         li.className = 'job-item';
         li.id = `job-${jobId}`;
-    
+        
         // Create a status indicator element
         const statusIndicator = document.createElement('div');
         statusIndicator.className = 'status-indicator';
-    
+        
         // Add initial status class
         statusIndicator.classList.add(status.toLowerCase());
-    
+        
         // Create a job info span to show job ID, status, and command
         const jobInfo = document.createElement('span');
         jobInfo.textContent = `Job ID: ${jobId}, Status: ${status}`;
-    
+        
         // Create a button to load job details (you can implement the action)
         const loadBtn = document.createElement("button");
         loadBtn.className = 'load-btn';
         loadBtn.textContent = "Load";
-        loadBtn.onclick = function () {
+        loadBtn.onclick = function (event) {
             sendSiteValueToBackend("chemem:LoadChimeraXJob", jobId); 
             openTab(event, 'ResultsTab');
-            
-            
-            // You can add more logic to load specific job details here
+    
         };
+        
     
         // Create a button to cancel the job (implement the backend job cancellation logic)
         const removeBtn = document.createElement("button");
@@ -1990,18 +1995,17 @@ This module was developed by:
         removeBtn.onclick = function () {
             removeJob(jobId);
         };
-    
+        
         // Append elements to the job item
         li.appendChild(statusIndicator);
         li.appendChild(jobInfo);
         li.appendChild(loadBtn);
         li.appendChild(removeBtn);
-    
+        
         // Add the job item to the job list
         jobList.appendChild(li);
-    
-        // Optionally simulate or update job status dynamically (as an example)
         updateJobStatus(jobId, "Running");
+        
     }
     
     // Function to remove a job item from the UI
@@ -2037,7 +2041,7 @@ This module was developed by:
         const retainIds = ['models', 'maps', 'chememBackendPath'];
     
         // Query all input fields, lists, and spans within QuickConfigTab except those specified to retain
-        const elements = quickConfigTab.querySelectorAll('input, select, ul, span');
+        const elements = quickConfigTab.querySelectorAll('input, select, ul, span:not(.toggle-arrow)');
     
         elements.forEach(element => {
             const id = element.id;
