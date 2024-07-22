@@ -266,6 +266,16 @@ class ChemEMResult:
             return all_scores
         else:
             return {}
+    
+    def get_loaded_result_with_id(self, solution_id):
+        for solution in self.fitting_results:
+            if solution.id == solution_id:
+                return solution 
+        for solution in self.postprocessing_results:
+            if solution.id == solution_id:
+                return solution
+        
+        return None
         
     
 class SolutionMap:

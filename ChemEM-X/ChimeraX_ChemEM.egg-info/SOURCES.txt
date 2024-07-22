@@ -12,6 +12,7 @@ src/chemem_job.py
 src/chemem_marker.py
 src/map_masks.py
 src/rdtools.py
+src/simulation.py
 src/template.html
 src/template_before_uniqe_keys.html
 src/tool.py

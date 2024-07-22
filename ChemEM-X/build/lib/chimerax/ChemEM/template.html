@@ -675,7 +675,8 @@ This module was developed by:
         <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
         <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs</button>
         <button class="tablinks" onclick="openTab(event, 'ResultsTab')">Results</button>
-        <button class="tablinks" >Post-processing</button>
+        <button class="tablinks" onclick="openTab(event, 'SimulationTab'); getAvalilblePlatforms();">Build</button>
+        <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
         <!--<button class="tablinks" >Ligand Interactions</button> -->
     </div>
     
@@ -1188,6 +1189,51 @@ This module was developed by:
           </div>
           
      </div><!-- end of tab -->
+     
+     <div id="SimulationTab" class="tabcontent">
+         <div class="container" id="preprocResultsContent">
+             <legend>Simulation Builder</legend>
+              <label style="font-weight: bold;">Map Files</label>
+              <label for="SimulationMaps">Cryo-EM map:</label>
+                  <select id="SimulationMaps" name="SimulationMaps">
+                      <option value="N/A">N/A</option> <!-- Default None option -->
+                  </select>
+              
+              <label for="simuationResolution">Resolution (Å):</label>
+              <input type="number" id="simulationResolution" name="simulationResolution" step="0.001" value="2.6">
+          
+              
+              <label style="font-weight: bold;">Solution</label>
+              <input type="text" id="SimulationSolutionInput" disabled>
+              
+              
+              <label for="avaliblePlatforms">Platform:</label>
+                  <select id="avaliblePlatforms" name="avaliblePlatforms">
+                      
+                  </select>
+                  
+              <label style="font-weight: bold;">Upload Protein File</label>
+              <label style="font-weight: bold;">Upload Ligand File</label>
+             
+             <button type="button" class="add-button" onclick="buildSimulation()">Build</button>
+         </div>
+         
+     </div><!-- end of tab -->
+     
+     <div id="RunSimulationTab" class="tabcontent">
+         <div class="container" id="preprocResultsContent">
+         <legend>Simulation</legend>
+         </div>
+         
+         <div class="container" id="preprocResultsContent">
+         <legend>Control Panel</legend>
+             <button id="toggleButton">Run</button>
+             <button id="StopSimulationButton">Stop</button> 
+         </div>
+         
+         
+     </div><!-- end of tab -->
+     
 
     <script>
     let ligandIdCounter = 0;
@@ -1245,13 +1291,19 @@ This module was developed by:
         const selectElement = document.getElementById(elementId);
         
         if (!selectElement) {
-            console.error("No select element found with ID:", elementId);
+            alert("No select element found with ID:");
             return;
         }
         selectElement.innerHTML = ''; // Clear existing options
         
         if (elementId === "maps") {
             // Add default None option
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            selectElement.appendChild(defaultOption);
+        }
+        if (elementId === "SimulationMaps") {
             const defaultOption = document.createElement('option');
             defaultOption.value = 'None';
             defaultOption.text = 'None';
@@ -1908,7 +1960,14 @@ This module was developed by:
             sendParameterToBackend("chemem:SetCurrentMap", selectElement.value, selectElement.value, "MapParameter");
         }
     }
-
+    
+    function onSimulationMapsPopulated() {
+        const selectElement = document.getElementById('SimulationMaps');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetSimulationMap", selectElement.value, selectElement.value, "MapParameter");
+        }
+    }
+    
     function saveConfFile() {
         
          sendSiteValueToBackend("chemem:SaveConfFile", "None");
@@ -2174,7 +2233,7 @@ This module was developed by:
                 button.textContent = 'View';
             }
         });
-
+        
         // Append the button to the li
         li.appendChild(button);
 
@@ -2208,7 +2267,18 @@ This module was developed by:
             }
         });
         
+        const addButton = document.createElement('button');
+        addButton.textContent = 'Add';
+        addButton.addEventListener('click', function () {
+            sendSiteValueToBackend("chemem:AddSolutionToSimulation", id);
+            openTab(event, 'SimulationTab');
+            getAvalilblePlatforms();
+        });
+        
+        
+        
         li.appendChild(button);
+        li.appendChild(addButton);
         const ul = document.getElementById(list);
         ul.appendChild(li);
     }
@@ -2232,9 +2302,59 @@ This module was developed by:
             }
         });
     }
+    
+    //simulation functions 
+    function setSolutionValue(solutionText) {
+        
+        var solutionInput = document.getElementById('SimulationSolutionInput');
+        solutionInput.value = solutionText;
+    }
+   
+   function buildSimulation() {
+       sendSiteValueToBackend("chemem:BuildSimulation", "None");
+   }
+       
+    function addPlatformToList(textContent) {
+        // Find the list element by its ID
+        const list = document.getElementById('avaliblePlatforms');
+    
+        // Check if the list element exists
+        if (list) {
+            // Create a new list item element
+            const listItem = document.createElement('option');
+    
+            // Set the text of the list item to be the text provided
+            listItem.textContent = textContent;
+    
+            // Append the new list item to the list
+            list.appendChild(listItem);
+        } else {
+            // Log an error if the list element was not found
+            console.error('The list was not found.');
+        }
+    }
+   
+   function getAvalilblePlatforms() {
+       sendSiteValueToBackend("chemem:GetAvaliblePlatforms", "None");
+   
+   }
+   
+   function setPlatform(platform) {
+       sendSiteValueToBackend("chemem:SetPlatform", platform);
+   }
+   
+   function runSimulation() {
+       sendSiteValueToBackend("chemem:RunSimulation", "None");
+   }
+   
+   function pauseSimulation() {
+       sendSiteValueToBackend("chemem:PauseSimulation", "None");
+   }
    
    
-   
+   function stopSimulation() {
+      sendSiteValueToBackend("chemem:StopSimulation", "None");
+   }
    
    document.addEventListener('DOMContentLoaded', function() {
    
@@ -2246,6 +2366,7 @@ This module was developed by:
         sendSiteValueToBackend("chemem:UpdateModels", "None");
         sendSiteValueToBackend("chemem:UpdateMaps", "None");
         sendSiteValueToBackend("chemem:UpdateExes", "None");
+        sendSiteValueToBackend("chemem:UpdateSimulationMaps", "None");
         
         // Attach change listeners to all checkboxes within the runtime option container
         const checkboxes = document.querySelectorAll('#runtime-option input[type="checkbox"]');
@@ -2274,6 +2395,11 @@ This module was developed by:
             sendParameterToBackend("chemem:SetCurrentMap", this.value, this.value, "MapParameter");
         });
         
+        const selectElementSimulationMap = document.getElementById('SimulationMaps');
+        selectElementSimulationMap.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetSimulationMap", this.value, this.value, "MapParameter");
+        });
+        
         const selectElementExe = document.getElementById('chememExes');
         selectElementExe.addEventListener('change', function() {
             sendParameterToBackend("chemem:SetCurrentExe", this.value, this.value, "PathParameter");
@@ -2282,6 +2408,12 @@ This module was developed by:
         const inputElementresolution = document.getElementById('resolution');
         inputElementresolution.addEventListener('input', function() {   
             sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementSimulationResolution = document.getElementById('simulationResolution');
+        inputElementSimulationResolution.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateSimulationParameter", this.id, this.value, "FloatParameter");
             
         });
         
@@ -2392,6 +2524,30 @@ This module was developed by:
         nonslider.oninput = function() {
             nonoutput.textContent = this.value;
         };
+        
+        const selectPlatformElement = document.getElementById('avaliblePlatforms');
+        selectPlatformElement.addEventListener('change', function() {
+            setPlatform(this.value);
+            
+            });
+        
+        var toggleButton = document.getElementById('toggleButton');
+
+        toggleButton.addEventListener('click', function () {
+            if (this.textContent === 'Run') {
+                runSimulation(); // Function to be called when button says "Run"
+                this.textContent = 'Pause'; // Change button text to "Pause"
+            } else {
+                pauseSimulation(); // Function to be called when button says "Pause"
+                this.textContent = 'Run'; // Change button text back to "Run"
+            }
+        });
+        
+        var StopSimulationButton = document.getElementById('StopSimulationButton');
+        StopSimulationButton.addEventListener('click', function () {
+            stopSimulation();
+        });
+        
     });
     
     

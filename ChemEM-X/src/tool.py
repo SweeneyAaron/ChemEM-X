@@ -20,11 +20,13 @@ import copy
 import uuid
 import threading
 import time
+import tempfile
+import shutil
 
-from chimerax.ChemEM.chemem_job import  JobHandler, LocalChemEMJob
+from chimerax.ChemEM.chemem_job import  JobHandler, LocalChemEMJob, SimulationJob, SIMULATION_JOB, CHEMEM_JOB, EXPORT_SIMULATION
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
 from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap
-
+from chimerax.ChemEM.simulation import Simulation
 from chimerax.mouse_modes import MouseMode
 from chimerax.markers import MarkerSet
 from chimerax.ui import HtmlToolInstance
@@ -37,8 +39,108 @@ from chimerax.core.commands import run
 from chimerax.mouse_modes.std_modes import MovePickedModelsMouseMode
 from chimerax.markers.mouse import MoveMarkersPointMouseMode
 
+import parmed
+from openmm import XmlSerializer
+from openmm import LangevinIntegrator, Platform
+from openmm import app
+from openmm import unit
+from openmm import MonteCarloBarostat, XmlSerializer, app, unit, CustomCompoundBondForce, Continuous3DFunction, vec3, Vec3
+from scipy.ndimage import gaussian_filter
+from openmm.unit.quantity import Quantity
 
 
+def pin_force():
+    expr = "pin_k * ((x1 - x0)^2 + (y1 - y0)^2 + (z1 - z0)^2)"
+    f = CustomCompoundBondForce(1, expr)
+    f.addPerBondParameter("pin_k")
+    f.addPerBondParameter("x0")
+    f.addPerBondParameter("y0")
+    f.addPerBondParameter("z0")
+    return f
+
+def pin_atoms(idx_to_pin, struct, pin_k=500):
+
+    pin_f = pin_force()
+    for atom_index in idx_to_pin:
+        
+        atm = struct.atoms[atom_index]
+        x0, y0, z0 = Quantity(
+            value=[atm.xx, atm.xy, atm.xz], unit=unit.angstrom)
+        #x0, y0, z0 = atm.xx, atm.xy, atm.xz
+        pin_f.addBond([atom_index], [pin_k, x0, y0, z0])
+    return pin_f
+
+def map_potential_force_field(m, origin, apix, box_size, global_k, blur=0):
+     
+    f = CustomCompoundBondForce(1, '')
+    d3d_func = compute_map_field(m,origin, apix, box_size, blur)
+    f.addTabulatedFunction(name='map_potential', function=d3d_func)
+    f.addGlobalParameter(name='global_k', defaultValue=global_k)
+    f.addPerBondParameter(name='individual_k')
+    f.setEnergyFunction('-global_k * individual_k * map_potential(z1,y1,x1)')
+    return f
+
+def compute_map_field(m, origin, apix, box_size, blur=0, d3d_func=None):
+    #f = CustomCompoundBondForce(1,'')
+    #     d3d_func = Discrete3DFunction(*m.fullMap.shape, m.fullMap.ravel().copy())
+    morg = np.array(origin)[::-1] - apix/2
+
+    mdim = np.array(box_size)* apix
+
+    mmax = morg+mdim
+
+    mod_m = gaussian_filter(m, blur)
+    minmaxes = np.array(list(zip(morg/10, mmax/10))).ravel()
+    
+
+    if d3d_func is None:
+
+        d3d_func = Continuous3DFunction(
+            *mod_m.shape, mod_m.ravel(order="F"), *minmaxes)
+
+    else:
+        d3d_func.setFunctionParameters(
+            *mod_m.shape, mod_m.ravel(order="F"), *minmaxes)
+    
+    return d3d_func
+
+
+import numpy as np
+
+def get_inc_index(positions, map_origin, box_size, apix):
+    """
+    Determine which atoms are inside a specified box.
+
+    Parameters:
+    - positions (numpy.ndarray): Array of atom positions (shape: num_atoms x 3).
+    - map_origin (tuple): The (x, y, z) coordinates of the box origin.
+    - box_size (tuple): The size of the box in pixels (x, y, z).
+    - apix (float): Angstroms per pixel, the scale factor for box dimensions.
+
+    Returns:
+    - Tuple of lists: (indices_inside, indices_outside)
+    """
+    # Calculate the actual dimensions in angstroms
+    box_dimensions = np.array(box_size) * apix
+
+    # Initialize lists to store indices
+    indices_inside = []
+    indices_outside = []
+
+    # Iterate through all positions and determine if inside or outside the box
+    for index, position in enumerate(positions):
+        # Convert position to be relative to the origin of the map
+        rel_position = position - np.array(map_origin)
+        
+        # Check if the position is within the bounds in all three dimensions
+        if np.all(rel_position >= 0) and np.all(rel_position <= box_dimensions):
+            indices_inside.append(index)
+        else:
+            indices_outside.append(index)
+
+    return indices_inside, indices_outside
+
+#TODO! move this to another file
 class Config:
     
     def __init__(self, paramter_object, session,):
@@ -66,13 +168,19 @@ class Config:
         if self.check_variable('current_model'):
             model = self.parameters.parameters['current_model']
             model_file = f"{model.name}.pdb"
+            
+            rm_model = False
+            if model.id is None:
+                self.session.models.add([model])
+                rm_model = True
+                
             model_id = f"#{'.'.join([str(i) for i in model.id])}"
             model_file = os.path.join(self.parameters.parameters['model_path'], model_file)
-            
             com = f'save {model_file} format pdb models {model_id}'
-            
-            
             run(self.session, com)
+            if rm_model:
+                self.session.models.remove([model])
+            
             self.file += '\n'
             self.file += f"protein = {model_file}\n"
         else:
@@ -153,6 +261,7 @@ class CHEMEM(HtmlToolInstance):
     def __init__(self, session, tool_name):
         super().__init__(session, tool_name, size_hint=(600, 1000))
         self.parameters = Parameters()
+        
         self.view = view.ChemEMView(self) #!!!
         
         self.add_model_handeler = self.session.triggers.add_handler(ADD_MODELS, self.update_models)
@@ -167,12 +276,16 @@ class CHEMEM(HtmlToolInstance):
         self.current_protonation_states = None
         self.current_significant_features_object = None
         self.current_loaded_result = None
+        self.current_simulation = Parameters()
         self._handler_references = [self.add_model_handeler, 
                                      self.remove_model_handeler, 
                                      self.moved_model_handeler,
                                      self.job_remove_task]
         
         self.avalible_chemem_exes =  get_chemem_paths()
+        self.avalible_platforms = self.get_platforms()
+        self.platforms_set = False
+        self.temp_build_dir = None
         #remove!!
         self.avalible_binding_sites = 0
         
@@ -181,79 +294,146 @@ class CHEMEM(HtmlToolInstance):
         #TODO!
         self.session.metadata = self
         
-    
-    def remove_task(self, *args):
-        
-        if args[1].success:
-            js_code = f'updateJobStatus( {args[1].id}, "Completed");'
-        else:
-            js_code = f'updateJobStatus( {args[1].id}, "Failed");'
-        self.run_js_code(js_code)
-        
-        
-    def add_task(self, *args):
-        js_code = 'alert("JobAdded");'
-        self.run_js_code(js_code)
-  
-    def openmm_test_run(self):
-        import parmed
-        from openmm import XmlSerializer
-        from openmm import LangevinIntegrator, Platform
-        from openmm import app
-        from openmm import unit
-        
+    def get_platforms(self):
         import chimerax 
         openmm_plugins_dir = os.path.join(chimerax.app_lib_dir, 'plugins')
         Platform.loadPluginsFromDirectory(openmm_plugins_dir)
         avalible_platforms = []
         for i in range(Platform.getNumPlatforms()):
             avalible_platforms.append(Platform.getPlatform(i).getName())
+        return avalible_platforms
         
-        self.platforms = avalible_platforms
+    def remove_task(self, *args):
         
-        with open('/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_system.xml', 'r') as file:
-            complex_system = XmlSerializer.deserialize(file.read())
+        job = args[1]
+        if job.job_type == CHEMEM_JOB:
             
-        cp1 = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_structure.prmtop'
-        cp2 = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/complex_structure.inpcrd'
-        complex_structure = parmed.load_file(cp1, xyz=cp2)
+            if job.success:
+                js_code = f'updateJobStatus( {job.id}, "Completed");'
+            else:
+                js_code = f'updateJobStatus( {job.id}, "Failed");'
+            self.run_js_code(js_code)
+            
+        elif job.job_type == EXPORT_SIMULATION:
+            #self.openmm_test_run(job)
+            
+            if 'current_map' in self.current_simulation.parameters:
+                current_map = self.current_simulation.parameters['current_map']
+            else:
+                current_map = None
+            
+            chimerax_model = self.current_simulation.parameters['AddedSolution'].pdb_object
+            
+            simulation = Simulation(self.session, job.params.output, current_map, platform_name = self.platform)
+            self.simulation = simulation
+            simulation_model, atoms_to_position_index = simulation.get_model_from_complex_structure(chimerax_model)
+            self.simulation_model = simulation_model
+            self.atoms_to_position_index = atoms_to_position_index
+            
+            #self.session.models.add([simulation_model])
+            self.current_simualtion_id = None
+            
+            js_code = 'openTab(event, "RunSimulationTab");'
+            self.run_js_code(js_code)
+            self.remove_temp_directories()
+            
+
+            
+            #do this properly on init!!
+            
+    def remove_temp_directories(self):
         
-        self.complex_system = complex_system
-        self.complex_structure = complex_structure
+            if self.temp_build_dir is not None:
+                try:
+                    shutil.rmtree(self.temp_build_dir)
+                    self.temp_build_dir = None
+                except Exception as e:
+                    print("Unable To remove directory {self.temp_build_dir}, Error: {e}")
+    
+    def update_simulation_model(self):
         
-        #complex_system.getForce(pin_idx).setForceGroup(force_group)
+        t1 = time.perf_counter()
+        positions = np.array(self.simulation.get_positions())
+        for atom, index in self.atoms_to_position_index:
+            atom.coord = positions[index]
+        t2 = time.perf_counter() - t1
+        #print('UpdateModleTime', t2)
+    
+    
+    def add_task(self, *args):
+        js_code = 'alert("JobAdded");'
+        self.run_js_code(js_code)
+
+
+    def update_positions(self,positions, atom_to_position_idx):
+        for atom, idx in atom_to_position_idx:
+            atom.coord = np.array([positions[idx].x, positions[idx].y, positions[idx].z])
+    
+    def link_atom_to_idx(self, simulation, model):
+        topology = simulation.topology
+        state = simulation.context.getState(getPositions=True)
+        positions = state.getPositions()
         
-        integrator = LangevinIntegrator(300*unit.kelvin, 1.0/unit.picoseconds,
-                                        1.0*unit.femtoseconds)
+        # Convert positions to nanometers
+        positions = positions.value_in_unit(unit.angstrom)
         
-        _platform = Platform.getPlatformByName('OpenCL')
+        simulation_residues = simulation.topology.residues()
+        pdb_residues = model.residues 
+        atom_to_position_idx = []
+        for sim_res, pdb_res in zip(simulation_residues, pdb_residues):
+            sim_atoms = sim_res.atoms() 
+            for atom in pdb_res.atoms:
+                atom_element = atom.element.name 
+                atom_position = atom.coord
+                atom_position = list([round(i,3) for i in atom_position])
+                for sim_atom in sim_res.atoms():
+                    sim_element = sim_atom.element.symbol
+                    sim_idx = sim_atom.index 
+                    sim_pos = [ round(positions[sim_idx].x,3),
+                                round(positions[sim_idx].y,3),
+                                round(positions[sim_idx].z,3)]
+                    
+                    if atom_position == sim_pos:
+                        
+                        atom_to_position_idx.append([atom, sim_idx])
+        return atom_to_position_idx
+        
+                    
+           
+    def run_simulation(self):
+        job = SimulationJob(self.session, self)
+        job.start()  
+        self.current_simualtion_id = job.id
+        self.job_handeler.add_job(job)
         
         
-        simulation = app.Simulation(
-            complex_structure.topology, complex_system, integrator, platform=_platform)
-        
-        simulation.context.setPositions(complex_structure.positions)
-        self.simulation = simulation
-        
-    def run(self):
-        chemem_path = self.parameters.parameters['chememBackendPath'].value 
+    
+    def run(self, executable, job_type):
         conf_file_path = self.conf_handler.file_path 
-        command = f"{chemem_path} {conf_file_path}"
+        command = f"{executable} {conf_file_path}"
+        job = LocalChemEMJob(self.session, command, self.conf_handler , job_type)
+        job_data = {"id": job.id, "status": "running"}
         
-        job = LocalChemEMJob(self.session, command, self.conf_handler)
+        if job_type == CHEMEM_JOB:
+            job_data_json = json.dumps(job_data)
+            js_code = f"addJob({job_data_json});"
+            self.run_js_code(js_code)
+            job.start()    
+            js_code = "resetQuickConfigTab();"
+            self.run_js_code(js_code)
+            self.job_handeler.add_job(job) 
         
-        job_data = {
-            "id": job.id,
-            "status": "running",
-        }
+        elif job_type == EXPORT_SIMULATION:
+            job.start()
+            self.job_handeler.add_job(job) 
+            
         
-        job_data_json = json.dumps(job_data)
-        js_code = f"addJob({job_data_json});"
-        self.run_js_code(js_code)
-        job.start()    
-        js_code = "resetQuickConfigTab();"
-        self.run_js_code(js_code)
-        self.job_handeler.add_job(job) # used for loading completed jobs!!
+
+    
+    def build_simulation(self):
+        #create a tempory directory to write files to 
+        #run the export_simulation blocking?
+        chemem_path = self.parameters.parameters['chememBackendPath'].value 
         
     
     def delete(self):
@@ -263,6 +443,7 @@ class CHEMEM(HtmlToolInstance):
         self._handler_references.clear() 
         #remove tempory file create by protonation
         CleanProtonationImage().run(self, None)
+        self.remove_temp_directories()
         super().delete()
     
     def mkdir(self, path):
@@ -271,7 +452,35 @@ class CHEMEM(HtmlToolInstance):
         except Exception as e:
             pass
     
-    def make_conf_file(self):
+    def make_conf_file(self, parameter_object):
+        '''
+        Make a configuration file object and save it to the state. 
+        Only one configuration file is made at a time, run ChemEM will
+        find the configuration file at self.conf_handeler
+        
+
+        Parameters
+        ----------
+        parameter_object : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        '''
+        if 'output' in parameter_object.parameters:
+            model_path = os.path.join(parameter_object.parameters['output'].value, 'Inputs')
+        else:
+            model_path = os.path.join('./', 'Inputs')
+        
+        self.mkdir(model_path)
+        parameter_object.parameters['model_path'] = model_path
+        conf_handler = Config(parameter_object.copy(), self.session)
+        conf_handler.run()
+        self.conf_handler = conf_handler
+    
+    def make_conf_file_old(self):
         
         if 'output' in self.parameters.parameters:
             model_path = os.path.join(self.parameters.parameters['output'].value, 'Inputs')
@@ -287,7 +496,6 @@ class CHEMEM(HtmlToolInstance):
  
         
     def run_js_code(self, js_code):
-       
         self.html_view.page().runJavaScript(js_code)
     
     
@@ -312,7 +520,8 @@ class CHEMEM(HtmlToolInstance):
         
         current_map = self.parameters.get_parameter('current_map')
         current_model = self.parameters.get_parameter('current_model')
-        #when the removed map or model is the current map or model
+        current_simulation_map = self.current_simulation.get_parameter('current_map')
+        
         if args[0] == 'remove models':
             
             if current_model in args[1]:
@@ -335,6 +544,7 @@ class CHEMEM(HtmlToolInstance):
                 #set current_map to None
                 UpdateMaps.execute(self, 'UpdateMaps', '_')
                 
+                
                 return
         
         if current_map is not None:
@@ -346,30 +556,37 @@ class CHEMEM(HtmlToolInstance):
             js_code_model = f'selectOptionByValue("models", "{current_model_key}");'
         
         
+        if current_simulation_map is not None:
+            current_simulation_map_key = UpdateSimulationMaps.get_map_id(current_simulation_map)
+            js_code_simulated_map =  f'selectOptionByValue("SimulationMaps", "{current_simulation_map_key}");'
+        
+        
+        
         UpdateModels.execute(self, 'UpdateModels', '_')
         UpdateMaps.execute(self, 'UpdateMaps', '_')
+        UpdateSimulationMaps.execute(self, 'UpdateSimulationMaps', '_')
         
         if current_map is not None:
             self.run_js_code(js_code_maps)
         
         if current_model is not None:
             self.run_js_code(js_code_model)
+        if current_simulation_map is not None:
+            self.run_js_code(js_code_simulated_map)
         
         
     def model_position_changed(self, *args):
-        print('MOVED OBJECT!!!!!!!!')
+        
         self.args = args
         if isinstance(args[1], ChemEMMarker):
-            print('marker_moved', args[1])
             position = args[1].residues[0].atoms[0].coord 
-            print('moved_pos', position)
             self.set_marker_position(position)
         
     def set_marker_position(self, position):
         self.session.metadata = self
-        print('mrk2')
+        
         if not self.marker_wrapper in self.session.models:
-            print('ADDDED MARKER TO MODELS!!')
+            
             self.session.models.add([self.marker_wrapper])
         
         self.marker_wrapper.residues[0].atoms[0].coord = position
@@ -711,14 +928,15 @@ class Command:
         """Execute the command with provided arguments."""
         
         if command  == cls.__name__:
-            if True:
-            #try:
+            #TODO!
+            #if True:
+            try:
                 cls.run(chemem, query)
-            #except Exception as e:
-            #    alert_message = f'ChemEM Error, unable to run command: {cls.__name__} - {e}'
-            #    print(alert_message)
-            #    js_code = f'alert("{alert_message}");'
-            #    chemem.run_js_code(js_code)
+            except Exception as e:
+                alert_message = f'ChemEM Error, unable to run command: {cls.__name__} - {e}'
+                print(alert_message)
+                js_code = f'alert("{alert_message}");'
+                chemem.run_js_code(js_code)
                 
     
     @classmethod
@@ -952,9 +1170,7 @@ class ShowLigandSmilesImage(Command):
                 js_code = f'alert("Smiles image not found {query}");'
                 chemem.run_js_code(js_code)
                 
-            print(query, image_idx)
-            print(chemem.current_protonation_states.protonation_states[image_idx])
-            print(chemem.current_protonation_states.images[image_idx])
+           
 
 class CleanProtonationImage(Command):
     @classmethod 
@@ -973,10 +1189,8 @@ class ResetConfig(Command):
 class RemoveJob(Command):
     @classmethod 
     def run(cls, chemem, query):
-        print("stop job")
-        print(chemem.job_handeler.jobs.keys())
         chemem.job_handeler.remove_job(query)
-        print(chemem.job_handeler.jobs.keys())
+        
        
 
 class IncrementBindingSiteCounter(Command):
@@ -1126,6 +1340,30 @@ class SetCurrentModel(Command):
         else:
             chemem.parameters.parameters['current_model'] = model
 
+class SetSimulationMap(Command):
+    #TODO! add cache functions!!!
+    @classmethod 
+    def run(cls, chemem, query):
+    
+        if query is None: #change to N/A
+            if 'current_map' in chemem.current_simulation.parameters:
+                del chemem.current_simulation.parameters['current_map']
+                
+        elif chemem.session.models.have_id(query.value):
+            model = [i for i in chemem.session.models if i.id == query.value][0]
+            cls.update_chemem(chemem, model)
+        else:
+            js_code = f"alert('ChemEM can't assign simulation map with id: {query.name});"
+            chemem.run_js_code(js_code)
+    
+    @classmethod 
+    def update_chemem(cls, chemem, model):
+        """Update ChemEM object state data."""
+        
+        chemem.current_simulation.parameters['current_map'] = model 
+        
+            
+
 class SetCurrentMap(Command):
     #TODO! add cache functions!!!
     @classmethod 
@@ -1146,14 +1384,9 @@ class SetCurrentMap(Command):
     @classmethod 
     def update_chemem(cls, chemem, model):
         """Update ChemEM object state data."""
-        if 'current_map' in chemem.parameters.parameters:
-            chemem.parameters.parameters['current_map'] = model 
-            #TODO! Clear and cache all model related data!!
-        else:
-            chemem.parameters.parameters['current_map'] = model 
         
+        chemem.parameters.parameters['current_map'] = model 
 
-      
 class UpdateMaps(Command):
     @classmethod
     def js_code(cls, model_names):
@@ -1179,6 +1412,31 @@ class UpdateMaps(Command):
     def get_map_id(cls, model):
         return f'{".".join([str(i) for i in model.id]) } - {model.name}'
 
+class UpdateSimulationMaps(Command):
+    @classmethod 
+    def js_code(cls, model_names):
+        options_json = json.dumps(model_names)  
+       
+        js_code = f'''
+        updateSelect("SimulationMaps", {options_json});
+        onSimulationMapsPopulated();
+        ''' #can remove on models populated!!!
+        
+        return js_code
+    @classmethod
+    def run(cls, chemem, query):
+        model_names = []
+        for index, model in enumerate(chemem.session.models): 
+            
+            if isinstance(model, Volume):
+                model_names.append(cls.get_map_id(model))
+        
+        js_code = cls.js_code(model_names)
+        chemem.run_js_code(js_code)    
+    
+    @classmethod 
+    def get_map_id(cls, model):
+        return f'{".".join([str(i) for i in model.id]) } - {model.name}'
 
 class ReadFileAndAlterChemEM(Command):
     
@@ -1258,7 +1516,7 @@ class SetDir(Command):
                 
             else:
                 js_code= f"alert(File does not exist: {file});"
-            print(js_code)
+            
             chemem.run_js_code(js_code)
     
     @classmethod
@@ -1320,8 +1578,12 @@ class UpdateChemEMParameter(Command):
     @classmethod 
     def run(cls, chemem, query):
         chemem.parameters.add(query)
-        print(chemem.parameters.parameters)
-
+        
+class UpdateSimulationParameter(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        chemem.current_simulation.add(query)
+        
 class SaveConfFile(Command):
     @classmethod 
     def run(cls, chemem, query):
@@ -1331,11 +1593,9 @@ class RunChemEM(Command):
     @classmethod 
     def run(cls, chemem, query):
         
-        chemem.make_conf_file()
-        chemem.run()
-
-
-
+        chemem.make_conf_file(chemem.parameters)
+        executable = chemem.parameters.parameters['chememBackendPath'].value 
+        chemem.run(executable,CHEMEM_JOB)
 
 
 class SetMaunualBindingSite(Command):
@@ -1387,7 +1647,6 @@ class BindingSiteFromMarker(Command):
                 
                 
                 site  = BindingSiteParameter.get_from_centroid(centroid, chemem)
-                print('site check:', site.name)
                 chemem.parameters.add_list_parameter('binding_sites', site)
                 chemem.current_binding_site_id = site.name 
                 
@@ -1538,19 +1797,112 @@ class SetEditBindingSiteValue(Command):
     def run(cls, chemem, query):
         chemem.render_site_from_key(query)
                  
+
+
+class AddSolutionToSimulation(Command):
+    @classmethod
+    def run(cls, chemem, query):
+        solution = chemem.current_loaded_result.get_loaded_result_with_id(query)
+        chemem.current_simulation.parameters['AddedSolution'] = solution
+        js_code = f'setSolutionValue("{solution.string()}");'
+        chemem.run_js_code(js_code)
         
-###binding site plan!! 
-"""
-TODO! --  
-Cache!!
-AutoSite!!
---cleanup !
-"""
+
+class BuildSimulation(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        chemem_executable = chemem.parameters.get_parameter('chememBackendPath')
+        if chemem_executable is not None:
+            if os.path.exists(f"{chemem_executable.value}.export_simulation"): 
+                
+                
+                executable = f"{chemem_executable.value}.export_simulation"
+                if 'AddedSolution' in chemem.current_simulation.parameters:
+                    solution = chemem.current_simulation.parameters['AddedSolution']
+                    ligand_files = extract_simulation_data_from_solution(solution)
+                    
+                    chemem.current_simulation.parameters['Ligands'] = ligand_files
+                    new_model = build_model_without_ligands(solution.pdb_object)
+                    chemem.current_simulation.parameters['current_model'] = new_model
+                    
+                #ADD A CHECK FOR IF THE LIGAND FILES ARE IN THE PDB
+                
+                
+                chemem.temp_build_dir = tempfile.mkdtemp()
+                #chemem.temp_build_dir = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/debug/test_simulate/'
+                chemem.current_simulation.add(PathParameter('output', chemem.temp_build_dir))
+                chemem.make_conf_file(chemem.current_simulation)
+                chemem.run(executable, EXPORT_SIMULATION)
+                
+                #create a tempory directory to write files to 
+                #run the export_simulation blocking?
+                
+            else:
+                chemem.run_js_code('alert("Simulation requires ChemEM v0.0.4");')
+        else:
+            chemem.run_js_code('alert("No ChemEM executable found");')
+
+
+class GetAvaliblePlatforms(Command):
+    
+    @classmethod 
+    def js_code(cls, platform_name):
+        js_code = f'addPlatformToList("{platform_name}");'
+        return js_code
+    
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.platforms_set:
+            pass
+        else:
+            for platform_name in chemem.avalible_platforms:
+                js_code = cls.js_code(platform_name)
+                chemem.run_js_code(js_code)
+            chemem.platforms_set = True
+
+class SetPlatform(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        chemem.platform = query
+
+
+class RunSimulation(Command):
+    #TODO! -- with this set up the value of current simulation needs to be set to none 
+    #when a new simulation is created
+    @classmethod 
+    def run(cls, chemem, query):
+        
+        if chemem.current_simualtion_id is None:
+            chemem.run_simulation()
+        else:
+            
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            job._pause = False 
+
+class PauseSimulation(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            job._pause = True
+            
+class StopSimulation(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            job.running = False
+
 
 
 #╔═════════════════════════════════════════════════════════════════════════════╗
 #║                             Class wrappers                                  ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
+
+
 class RenderBindingSite:
     def __init__(self, session, 
                  binding_site, 
@@ -1709,7 +2061,33 @@ def activate_marker_placement(chemem, parameter):
 #╚═════════════════════════════════════════════════════════════════════════════╝
 
 
+def build_model_without_ligands(model):
+    new_model = model.copy() 
+    for residue in new_model.residues:
+        if residue.standard_aa_name is None:
+            new_model.delete_residue(residue)
+    
+    return new_model
+                
+        
 
+
+def extract_simulation_data_from_solution(solution):
+    #PDB without ligand!!, ligand files!!
+    pdb_file = solution.pdb_object.filename 
+    file_matcher = solution.pdb_object.name.replace('.pdb', '')
+    ligand_dir = os.path.dirname(pdb_file)
+    
+    if ligand_dir.endswith('post_processing'):
+        pass
+    elif ligand_dir.endswith('PDB'):
+        ligand_dir = ligand_dir = os.path.dirname(ligand_dir)
+        
+    ligand_matches = [i for i in os.listdir(ligand_dir) if i.endswith('.sdf') and i.startswith(file_matcher)]
+    if len(ligand_matches):
+        return [PathParameter(num, os.path.join(ligand_dir,i)) for num,i in enumerate(ligand_matches)]
+        
+    
 
 def set_conda_environment():
     conda_path_guess = [
