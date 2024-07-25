@@ -347,7 +347,7 @@ This module was developed by:
             border-top: none;
         }
         
-        #manualBindingSitesList, #protonatedSmilesList , #preprocMapsList, #postprocMapsList, #fittingMapsList {
+        #manualBindingSitesList, #protonatedSmilesList , #preprocMapsList, #postprocMapsList, #fittingMapsList , #activeRestraints {
             list-style-type: none;
             padding: 8px;
             max-height: 100px;
@@ -358,7 +358,7 @@ This module was developed by:
             background-color: #f8f8f8;
         }
         
-        #manualBindingSitesList li, #protonatedSmilesList li, #preprocMapsList li, #postprocMapsList li, #fittingMapsList li {
+        #manualBindingSitesList li, #protonatedSmilesList li, #preprocMapsList li, #postprocMapsList li, #fittingMapsList li, #activeRestraints li {
             cursor: default;
             padding: 5px;
             border-bottom: 1px solid #e1e1e1;
@@ -367,7 +367,7 @@ This module was developed by:
             justify-content: space-between;
         }
         
-        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover, #preprocMapsList li:hover, #postprocMapsList li:hover, #fittingMapsList li:hover {
+        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover, #preprocMapsList li:hover, #postprocMapsList li:hover, #fittingMapsList li:hover, #activeRestraints li:hover {
             background-color: #e9eef7;
         }
         
@@ -1227,8 +1227,20 @@ This module was developed by:
          
          <div class="container" id="preprocResultsContent">
          <legend>Control Panel</legend>
+             <label for="temperatureInput">Temperature (K):</label>
+             <input type="number" id="temperatureInput" value="300"/>
+             
+             <button id="HbondTug" onclick="HBondTug()">HBond</button>
+             <button id="toggleTugButton" onclick="toggleTugMode()">Toggle Tug Mode</button>
              <button id="toggleButton">Run</button>
              <button id="StopSimulationButton">Stop</button> 
+         </div>
+         
+         <div class="container" id="preprocResultsContent">
+             <legend>Active Restraints</legend>
+             <div id="activeRestraintsContainer">
+                 <ul id="activeRestraints"></ul>
+             </div>
          </div>
          
          
@@ -2356,6 +2368,67 @@ This module was developed by:
       sendSiteValueToBackend("chemem:StopSimulation", "None");
    }
    
+   function sendTemperatureToBackend(temp) {
+       
+       
+       sendParameterToBackend("chemem:SetSimulationTempreture", "simulation_temp", temp, "IntParameter");
+
+   }
+   var tugModeActive = false;
+
+    function toggleTugMode() {
+        // This function will communicate with ChimeraX to toggle the mouse mode.
+        if (tugModeActive) {
+            // Switch back to default mouse mode
+            sendSiteValueToBackend("chemem:DisableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Enable Tug Mode';
+            
+        } else {
+            // Switch to tug mouse mode
+            sendSiteValueToBackend("chemem:EnableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Disable Tug Mode';
+            
+        }
+        tugModeActive = !tugModeActive;
+    }
+    
+    function HBondTug() {
+        sendSiteValueToBackend("chemem:SetHBondTug", "None");
+    
+    }
+    
+    function addRestraintToList(content, id) {
+        // Get the UL element by its ID
+        var ul = document.getElementById("activeRestraints");
+    
+        // Create a new list item
+        var li = document.createElement("li");
+    
+        // Set the ID for the LI
+        li.setAttribute("data-id", id); // Using data-id to associate the ID value
+    
+        // Add text content to the list item
+        li.textContent = content;
+    
+        // Create a delete button
+        var deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        
+        // Add an event listener to the delete button for removing the LI
+        deleteButton.addEventListener("click", function() {
+            ul.removeChild(li);
+            sendSiteValueToBackend("chemem:DeleteHbondTug", id);
+            
+        });
+    
+        // Append the delete button to the list item
+        li.appendChild(deleteButton);
+    
+        // Append the list item to the unordered list
+        ul.appendChild(li);
+    }
+
+   
    document.addEventListener('DOMContentLoaded', function() {
    
         
@@ -2547,6 +2620,11 @@ This module was developed by:
         StopSimulationButton.addEventListener('click', function () {
             stopSimulation();
         });
+        
+        const inputSimTempElement = document.getElementById('temperatureInput');
+        inputSimTempElement.addEventListener('input', debounce(function() {
+            sendTemperatureToBackend(this.value);
+        }, 500)); // 500 ms delay
         
     });
     

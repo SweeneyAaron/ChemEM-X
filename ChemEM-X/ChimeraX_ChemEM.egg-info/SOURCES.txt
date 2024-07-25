@@ -11,6 +11,7 @@ src/__init__.py
 src/chemem_job.py
 src/chemem_marker.py
 src/map_masks.py
+src/mouse_modes.py
 src/rdtools.py
 src/simulation.py
 src/template.html

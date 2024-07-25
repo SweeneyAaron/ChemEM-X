@@ -10,6 +10,7 @@ import subprocess
 from chimerax.core.tasks import Job, Task, TaskState
 import json
 import datetime
+import numpy as np
 
 CHEMEM_JOB = 'chemem'
 EXPORT_SIMULATION = 'chemem.export_simulation'
@@ -23,8 +24,13 @@ class SimulationJob(Task):
         self.running = True
         self._pause = False
         self.started = False
+        #set these to set a new tempreture
+        self._set_temp = None
         
-    
+        self.tug = None
+        self.hbond_tug = None
+        #[15879, np.array([128.76779874, 130.55397987, 173.85587692])]
+        self.step_size = 5
     def terminate(self):
         """Terminate this task.
 
@@ -47,10 +53,53 @@ class SimulationJob(Task):
         self.started = True
         self.chemem.simulation.minimise_system()
         self.chemem.update_simulation_model()
+        self.step_count = 0
         while self.running :
+            #For debugging!!
+            self.step_count += self.step_size
             if not self._pause:
-                self.chemem.simulation.step(10)
+                self.chemem.simulation.step(self.step_size)
                 self.chemem.update_simulation_model()
+            
+            #can update temp while paused
+            if self._set_temp is not None:
+                self.chemem.simulation.set_tempreture(self._set_temp)
+                self.chemem.update_simulation_model()
+                self._set_temp = None
+            
+            
+            if self.tug is not None:
+                
+                if self.tug.atom_idx is not None:
+                    
+                    self.chemem.simulation.update_tug_force_for_atom(self.tug.atom_idx, self.tug.end_coord)
+                    for num in range(20):
+                        
+                        self.chemem.simulation.step(self.step_size)
+                        self.chemem.update_simulation_model()
+                    self.chemem.simulation.update_tug_force_for_atom(self.tug.atom_idx, self.tug.end_coord, tug_k = 0.0)
+                    self.tug.atom_idx = None
+                        #set the tug stuff back to None
+            
+            if self.hbond_tug is not None:
+                
+                self.chemem.simulation.update_hbond_tug_force_for_atom(self.hbond_tug[0],
+                                                                       hbond_dist_k = self.hbond_tug[1],
+                                                                       hbond_angle_k = self.hbond_tug[2])
+                for num in range(20):
+                    #run for a while incase the simulation is paused
+                    self.chemem.simulation.step(self.step_size)
+                    self.chemem.update_simulation_model()
+                self.hbond_tug = None
+            
+            #if self.step_count == 250:
+            #    print('HBOND TUG TEST TIME')
+            #    self.chemem.simulation.update_hbond_tug_force_for_atom(self.hbond_tug)
+                
+            
+                
+            
+            
     
     
     

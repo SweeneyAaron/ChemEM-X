@@ -27,6 +27,7 @@ from chimerax.ChemEM.chemem_job import  JobHandler, LocalChemEMJob, SimulationJo
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
 from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap
 from chimerax.ChemEM.simulation import Simulation
+from chimerax.ChemEM.mouse_modes import  DragCoordinatesMode
 from chimerax.mouse_modes import MouseMode
 from chimerax.markers import MarkerSet
 from chimerax.ui import HtmlToolInstance
@@ -38,7 +39,7 @@ from chimerax import open_command
 from chimerax.core.commands import run 
 from chimerax.mouse_modes.std_modes import MovePickedModelsMouseMode
 from chimerax.markers.mouse import MoveMarkersPointMouseMode
-
+from chimerax.geometry import distance as get_distance
 import parmed
 from openmm import XmlSerializer
 from openmm import LangevinIntegrator, Platform
@@ -47,6 +48,7 @@ from openmm import unit
 from openmm import MonteCarloBarostat, XmlSerializer, app, unit, CustomCompoundBondForce, Continuous3DFunction, vec3, Vec3
 from scipy.ndimage import gaussian_filter
 from openmm.unit.quantity import Quantity
+
 
 
 def pin_force():
@@ -286,6 +288,7 @@ class CHEMEM(HtmlToolInstance):
         self.avalible_platforms = self.get_platforms()
         self.platforms_set = False
         self.temp_build_dir = None
+        self.current_restraints = {}
         #remove!!
         self.avalible_binding_sites = 0
         
@@ -327,9 +330,11 @@ class CHEMEM(HtmlToolInstance):
             simulation = Simulation(self.session, job.params.output, current_map, platform_name = self.platform)
             self.simulation = simulation
             simulation_model, atoms_to_position_index = simulation.get_model_from_complex_structure(chimerax_model)
+            self.hbond_idxs  = simulation.get_simualtion_hbond_pairs(atoms_to_position_index)
+            simulation.set_forces()
             self.simulation_model = simulation_model
             self.atoms_to_position_index = atoms_to_position_index
-            
+            self.atoms_to_position_index_as_dic = {i[0]:i[1] for i in atoms_to_position_index}
             #self.session.models.add([simulation_model])
             self.current_simualtion_id = None
             
@@ -369,37 +374,6 @@ class CHEMEM(HtmlToolInstance):
         for atom, idx in atom_to_position_idx:
             atom.coord = np.array([positions[idx].x, positions[idx].y, positions[idx].z])
     
-    def link_atom_to_idx(self, simulation, model):
-        topology = simulation.topology
-        state = simulation.context.getState(getPositions=True)
-        positions = state.getPositions()
-        
-        # Convert positions to nanometers
-        positions = positions.value_in_unit(unit.angstrom)
-        
-        simulation_residues = simulation.topology.residues()
-        pdb_residues = model.residues 
-        atom_to_position_idx = []
-        for sim_res, pdb_res in zip(simulation_residues, pdb_residues):
-            sim_atoms = sim_res.atoms() 
-            for atom in pdb_res.atoms:
-                atom_element = atom.element.name 
-                atom_position = atom.coord
-                atom_position = list([round(i,3) for i in atom_position])
-                for sim_atom in sim_res.atoms():
-                    sim_element = sim_atom.element.symbol
-                    sim_idx = sim_atom.index 
-                    sim_pos = [ round(positions[sim_idx].x,3),
-                                round(positions[sim_idx].y,3),
-                                round(positions[sim_idx].z,3)]
-                    
-                    if atom_position == sim_pos:
-                        
-                        atom_to_position_idx.append([atom, sim_idx])
-        return atom_to_position_idx
-        
-                    
-           
     def run_simulation(self):
         job = SimulationJob(self.session, self)
         job.start()  
@@ -1895,6 +1869,129 @@ class StopSimulation(Command):
             simulation_id = chemem.current_simualtion_id
             job = chemem.job_handeler.jobs[simulation_id]
             job.running = False
+
+
+class SetSimulationTempreture(Command):
+    @classmethod 
+    def run(cls,chemem, query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            job._set_temp = query.value
+
+class EnableTugMode(Command):
+    @classmethod
+    def run(cls,chemem, query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            chemem.default_mouse_mode = chemem.session.ui.mouse_modes.mode(button='right')
+            new_mode = DragCoordinatesMode(chemem.session, {i[0] : i[1] for i in chemem.atoms_to_position_index})
+            chemem.session.ui.mouse_modes.bind_mouse_mode(mouse_button="right", mode= new_mode)
+            job.tug = new_mode
+        
+        
+
+class DisableTugMode(Command):
+    @classmethod
+    def run(cls,chemem, query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            job.tug = None
+            chemem.session.ui.mouse_modes.bind_mouse_mode(mouse_button="right", mode= chemem.default_mouse_mode)
+            chemem.default_mouse_mode = None
+
+
+class SetHBondTug(Command):
+    @classmethod
+    def js_code(cls, selected_atoms, restraint_id):
+        # Function to escape JavaScript string literals
+        def escape_js_string(s):
+            return s.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '')
+    
+        # Function to remove the part of the string before and including '.pdb '
+        def trim_pdb_info(s):
+            parts = s.split('.pdb ')
+            return parts[1] if len(parts) > 1 else s  # returns the part after '.pdb ' if it exists
+    
+        # Construct the message with all special characters escaped
+        donor = escape_js_string(trim_pdb_info(selected_atoms[0].string()))
+        hydrogen = escape_js_string(trim_pdb_info(selected_atoms[1].string()))
+        acceptor = escape_js_string(trim_pdb_info(selected_atoms[2].string()))
+    
+        message = f'Donor: {donor}\\nHydrogen: {hydrogen}\\nAcceptor: {acceptor}'
+    
+        # Create the JavaScript code string safely
+        js_code = f'addRestraintToList("{message}", "{restraint_id}");'
+        return js_code
+
+    @classmethod 
+    def run(cls,chemem,query):
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            simulation_model = chemem.simulation_model
+            #selected_atoms retured as Donor, hydrogen, acceptor
+            hbond_idx, selected_atoms = get_hbond_tug_index(simulation_model, chemem.atoms_to_position_index_as_dic)
+            if hbond_idx is not None:
+                if hbond_idx in chemem.hbond_idxs:
+                    hbond_tug_idx = chemem.hbond_idxs.index(hbond_idx)
+                    job.hbond_tug = [hbond_tug_idx, None, None]
+                    restraint_id = len(chemem.current_restraints)
+                    
+                    js_code = cls.js_code(selected_atoms, restraint_id)
+                    chemem.run_js_code(js_code)
+                    selected_atoms[1].selected = False
+                    #TODO add these properly and color code them
+                    com = 'distance sel'
+                    run(chemem.session, com)
+                    chemem.current_restraints[restraint_id] = [hbond_tug_idx, selected_atoms]
+                    
+                    
+class DeleteHbondTug(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        
+        if chemem.current_simualtion_id is not None:
+            simulation_id = chemem.current_simualtion_id
+            job = chemem.job_handeler.jobs[simulation_id]
+            hbond_tug_idx , selected_atoms = chemem.current_restraints[int(query)]
+            com = f'distance delete {selected_atoms[0].atomspec} {selected_atoms[2].atomspec}'
+            run(chemem.session, com)
+            job.hbond_tug = [hbond_tug_idx, 0.0, 0.0]
+            del chemem.current_restraints[int(query)]
+            
+        #set the tug!
+        #add a distance mointor 
+        #send a thing to the template
+
+def get_hbond_tug_index(model, atoms_to_index):
+    selected_atoms = [atom for residue in model.residues for atom in residue.atoms if atom.selected]
+
+    if len(selected_atoms) != 3:
+        return None
+    
+    hydrogen = next((atom for atom in selected_atoms if atom.element.name == 'H'), None)
+    if not hydrogen:
+        return None  
+    
+    non_hydrogens = [atom for atom in selected_atoms if atom != hydrogen]
+    if len(non_hydrogens) != 2:
+        return None, None
+    
+    donor = next((atom for atom in hydrogen.neighbors if atom in non_hydrogens), None)
+    if not donor:
+        return None, None  
+
+    acceptor = next((atom for atom in non_hydrogens if atom != donor), None)
+    if not acceptor:
+        return None, None  
+    try:
+        return [atoms_to_index[donor], atoms_to_index[hydrogen], atoms_to_index[acceptor]], [donor,hydrogen,acceptor]
+    except KeyError:
+        return None, None
+
 
 
 
