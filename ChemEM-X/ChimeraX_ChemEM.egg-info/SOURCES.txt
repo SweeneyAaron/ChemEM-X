@@ -10,6 +10,7 @@ src/.DS_Store
 src/__init__.py
 src/chemem_job.py
 src/chemem_marker.py
+src/config.py
 src/map_masks.py
 src/mouse_modes.py
 src/rdtools.py

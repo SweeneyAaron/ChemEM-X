@@ -26,8 +26,9 @@ import shutil
 from chimerax.ChemEM.chemem_job import  JobHandler, LocalChemEMJob, SimulationJob, SIMULATION_JOB, CHEMEM_JOB, EXPORT_SIMULATION
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
 from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap
-from chimerax.ChemEM.simulation import Simulation
+from chimerax.ChemEM.simulation import Simulation, ChemEMSimulation
 from chimerax.ChemEM.mouse_modes import  DragCoordinatesMode
+from chimerax.ChemEM.config import Config
 from chimerax.mouse_modes import MouseMode
 from chimerax.markers import MarkerSet
 from chimerax.ui import HtmlToolInstance
@@ -39,8 +40,8 @@ from chimerax import open_command
 from chimerax.core.commands import run 
 from chimerax.mouse_modes.std_modes import MovePickedModelsMouseMode
 from chimerax.markers.mouse import MoveMarkersPointMouseMode
-from chimerax.geometry import distance as get_distance
-import parmed
+
+
 from openmm import XmlSerializer
 from openmm import LangevinIntegrator, Platform
 from openmm import app
@@ -50,206 +51,6 @@ from scipy.ndimage import gaussian_filter
 from openmm.unit.quantity import Quantity
 
 
-
-def pin_force():
-    expr = "pin_k * ((x1 - x0)^2 + (y1 - y0)^2 + (z1 - z0)^2)"
-    f = CustomCompoundBondForce(1, expr)
-    f.addPerBondParameter("pin_k")
-    f.addPerBondParameter("x0")
-    f.addPerBondParameter("y0")
-    f.addPerBondParameter("z0")
-    return f
-
-def pin_atoms(idx_to_pin, struct, pin_k=500):
-
-    pin_f = pin_force()
-    for atom_index in idx_to_pin:
-        
-        atm = struct.atoms[atom_index]
-        x0, y0, z0 = Quantity(
-            value=[atm.xx, atm.xy, atm.xz], unit=unit.angstrom)
-        #x0, y0, z0 = atm.xx, atm.xy, atm.xz
-        pin_f.addBond([atom_index], [pin_k, x0, y0, z0])
-    return pin_f
-
-def map_potential_force_field(m, origin, apix, box_size, global_k, blur=0):
-     
-    f = CustomCompoundBondForce(1, '')
-    d3d_func = compute_map_field(m,origin, apix, box_size, blur)
-    f.addTabulatedFunction(name='map_potential', function=d3d_func)
-    f.addGlobalParameter(name='global_k', defaultValue=global_k)
-    f.addPerBondParameter(name='individual_k')
-    f.setEnergyFunction('-global_k * individual_k * map_potential(z1,y1,x1)')
-    return f
-
-def compute_map_field(m, origin, apix, box_size, blur=0, d3d_func=None):
-    #f = CustomCompoundBondForce(1,'')
-    #     d3d_func = Discrete3DFunction(*m.fullMap.shape, m.fullMap.ravel().copy())
-    morg = np.array(origin)[::-1] - apix/2
-
-    mdim = np.array(box_size)* apix
-
-    mmax = morg+mdim
-
-    mod_m = gaussian_filter(m, blur)
-    minmaxes = np.array(list(zip(morg/10, mmax/10))).ravel()
-    
-
-    if d3d_func is None:
-
-        d3d_func = Continuous3DFunction(
-            *mod_m.shape, mod_m.ravel(order="F"), *minmaxes)
-
-    else:
-        d3d_func.setFunctionParameters(
-            *mod_m.shape, mod_m.ravel(order="F"), *minmaxes)
-    
-    return d3d_func
-
-
-import numpy as np
-
-def get_inc_index(positions, map_origin, box_size, apix):
-    """
-    Determine which atoms are inside a specified box.
-
-    Parameters:
-    - positions (numpy.ndarray): Array of atom positions (shape: num_atoms x 3).
-    - map_origin (tuple): The (x, y, z) coordinates of the box origin.
-    - box_size (tuple): The size of the box in pixels (x, y, z).
-    - apix (float): Angstroms per pixel, the scale factor for box dimensions.
-
-    Returns:
-    - Tuple of lists: (indices_inside, indices_outside)
-    """
-    # Calculate the actual dimensions in angstroms
-    box_dimensions = np.array(box_size) * apix
-
-    # Initialize lists to store indices
-    indices_inside = []
-    indices_outside = []
-
-    # Iterate through all positions and determine if inside or outside the box
-    for index, position in enumerate(positions):
-        # Convert position to be relative to the origin of the map
-        rel_position = position - np.array(map_origin)
-        
-        # Check if the position is within the bounds in all three dimensions
-        if np.all(rel_position >= 0) and np.all(rel_position <= box_dimensions):
-            indices_inside.append(index)
-        else:
-            indices_outside.append(index)
-
-    return indices_inside, indices_outside
-
-#TODO! move this to another file
-class Config:
-    
-    def __init__(self, paramter_object, session,):
-        
-        self.parameters = paramter_object 
-        self.file = f"""
-#╔═════════════════════════════════════════════════════════════════════════════╗
-#║                          ChemEM-X Configuration File                        ║
-#╚═════════════════════════════════════════════════════════════════════════════╝
-#File created:  {datetime.datetime.now().strftime("%B %d, %Y, %I:%M %p")}
-"""
-        self.session = session
-        self.output = './'
-        
-        
-    
-    def get_output(self):
-        if self.check_variable('output'):
-            
-            if os.path.exists(self.parameters.parameters['output'].value):
-                self.output = self.parameters.parameters['output'].value
-        #self.file += f'output = {self.output}\n'
-    
-    def get_protein(self):
-        if self.check_variable('current_model'):
-            model = self.parameters.parameters['current_model']
-            model_file = f"{model.name}.pdb"
-            
-            rm_model = False
-            if model.id is None:
-                self.session.models.add([model])
-                rm_model = True
-                
-            model_id = f"#{'.'.join([str(i) for i in model.id])}"
-            model_file = os.path.join(self.parameters.parameters['model_path'], model_file)
-            com = f'save {model_file} format pdb models {model_id}'
-            run(self.session, com)
-            if rm_model:
-                self.session.models.remove([model])
-            
-            self.file += '\n'
-            self.file += f"protein = {model_file}\n"
-        else:
-            #TODO! change to alert make more specific
-            print('Model Variable Needed')
-        
-        #write the file
-    
-    def get_ligand(self):
-        if self.check_variable('Ligands'):
-            
-            for ligand in self.parameters.parameters['Ligands']:
-                self.file += f"ligand = {ligand.value}\n" 
-        else:
-            #TODO! change to alert make more specific
-            print('Ligand Varable Needed!!')
-    
-    def get_map(self):
-        if self.check_variable('current_map'):
-            map_path = self.parameters.parameters['current_map'].path
-            if self.check_variable('resolution'):
-                self.file += f"densmap = {map_path}\n"
-                #self.file += f"resolution = {self.parameters.parameters['resolution'].value}\n"
-            else:
-                print('Map Entered with no resolution')
-                return
-        else:
-            if self.check_variable('resolution'):
-                print('Resolution Entered with No map !!!')
-    
-    def get_binding_sites(self):
-        if self.check_variable('binding_sites_conf'):
-            for site in self.parameters.parameters['binding_sites_conf']:
-                self.file += f"centroid = {site.centroid}\n"
-                self.file += f"segment_dimensions = {site.box_size}\n"
-        else:
-            #TODO!
-            print('No Value entered for binding site!!')
-    
-    def get_parameters(self):
-        self.file += '\n'
-        for param in  self.parameters.parameters.values():
-            if hasattr(param, 'chemem_string'):
-                self.file += param.chemem_string()
-                
-    def check_variable(self, var):
-        if var in self.parameters.parameters:
-            return True 
-        else:
-            return False
-
-    def write_file(self):
-        file_name = os.path.join(self.output, 'ChemEM-X_conf.conf')
-        with open(file_name, 'w') as f:
-            f.write(self.file)
-        self.file_path = file_name
-        
-            
-    def run(self):
-        self.get_output()
-        self.get_protein()
-        self.get_ligand()
-        self.get_map()
-        self.get_binding_sites()
-        self.get_parameters()
-        self.write_file()
-        print(self.file) #TODO! for debuging!!
         
 
 class CHEMEM(HtmlToolInstance):
@@ -296,7 +97,17 @@ class CHEMEM(HtmlToolInstance):
         #enable for debugging
         #TODO!
         self.session.metadata = self
+    
+    
+    def dock(self):
+        chemem_simulation =  ChemEMSimulation(self.session,
+                                              '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/debug/test_simulate', #filepath
+                                              None,
+                                              np.array([133.538, 132.957, 174.475]),
+                                              self.atoms_to_position_index)
         
+        self.chemem_openmm = chemem_simulation
+    
     def get_platforms(self):
         import chimerax 
         openmm_plugins_dir = os.path.join(chimerax.app_lib_dir, 'plugins')
@@ -344,12 +155,13 @@ class CHEMEM(HtmlToolInstance):
             
 
             
-            #do this properly on init!!
+           
             
     def remove_temp_directories(self):
         
             if self.temp_build_dir is not None:
                 try:
+                    
                     shutil.rmtree(self.temp_build_dir)
                     self.temp_build_dir = None
                 except Exception as e:
@@ -362,7 +174,7 @@ class CHEMEM(HtmlToolInstance):
         for atom, index in self.atoms_to_position_index:
             atom.coord = positions[index]
         t2 = time.perf_counter() - t1
-        #print('UpdateModleTime', t2)
+        
     
     
     def add_task(self, *args):
@@ -552,9 +364,7 @@ class CHEMEM(HtmlToolInstance):
     def model_position_changed(self, *args):
         
         self.args = args
-        if isinstance(args[1], ChemEMMarker):
-            position = args[1].residues[0].atoms[0].coord 
-            self.set_marker_position(position)
+        
         
     def set_marker_position(self, position):
         self.session.metadata = self
@@ -873,7 +683,6 @@ class Parameters:
             for site in sites:
                 
                 js_code = f'triggerDeleteButtonClickOnBindingSite("{site.name}");'
-                print(js_code)
                 chemem.run_js_code(js_code)
                     
                     
@@ -908,7 +717,6 @@ class Command:
                 cls.run(chemem, query)
             except Exception as e:
                 alert_message = f'ChemEM Error, unable to run command: {cls.__name__} - {e}'
-                print(alert_message)
                 js_code = f'alert("{alert_message}");'
                 chemem.run_js_code(js_code)
                 
@@ -1134,7 +942,6 @@ class ShowLigandSmilesImage(Command):
                 chemem.current_protonation_states.save_image_temporarily(image_idx)
                 file_path = chemem.current_protonation_states.current_image_file.name
                 if file_path is not None:
-                    print('file, ', file_path)
                     
                     js_code = cls.js_code(file_path)
                     chemem.run_js_code(js_code)
@@ -1561,7 +1368,7 @@ class UpdateSimulationParameter(Command):
 class SaveConfFile(Command):
     @classmethod 
     def run(cls, chemem, query):
-        chemem.make_conf_file()
+        chemem.make_conf_file(chemem.parameters)
 
 class RunChemEM(Command):
     @classmethod 
@@ -1584,10 +1391,7 @@ class SetMaunualBindingSite(Command):
         pass
         #update ligand bindig site id!! in js_code
 
-class ActivateMarkerPlacement(Command):
-    @classmethod 
-    def run(cls, chemem, query):
-        activate_marker_placement(chemem, BindingSiteParameter)
+
         
 
 class BindingSiteFromMarker(Command):
@@ -1756,8 +1560,7 @@ class RunSignificantFeaturesProtocol(Command):
 class ShowSignificantFeature(Command):
     @classmethod 
     def run(cls, chemem, query):
-        
-        print(f'Show Sig feature {int(query)}')
+
         chemem.current_significant_features_object.show_feature(int(query))
         
 class HideSignificantFeature(Command):
@@ -1771,13 +1574,12 @@ class SetEditBindingSiteValue(Command):
     def run(cls, chemem, query):
         chemem.render_site_from_key(query)
                  
-
-
 class AddSolutionToSimulation(Command):
     @classmethod
     def run(cls, chemem, query):
         solution = chemem.current_loaded_result.get_loaded_result_with_id(query)
         chemem.current_simulation.parameters['AddedSolution'] = solution
+        #need to add an rd_ligand also
         js_code = f'setSolutionValue("{solution.string()}");'
         chemem.run_js_code(js_code)
         
@@ -1801,7 +1603,7 @@ class BuildSimulation(Command):
                     
                 #ADD A CHECK FOR IF THE LIGAND FILES ARE IN THE PDB
                 
-                
+                #TODO!
                 chemem.temp_build_dir = tempfile.mkdtemp()
                 #chemem.temp_build_dir = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/debug/test_simulate/'
                 chemem.current_simulation.add(PathParameter('output', chemem.temp_build_dir))
@@ -1966,37 +1768,13 @@ class DeleteHbondTug(Command):
         #add a distance mointor 
         #send a thing to the template
 
-def get_hbond_tug_index(model, atoms_to_index):
-    selected_atoms = [atom for residue in model.residues for atom in residue.atoms if atom.selected]
 
-    if len(selected_atoms) != 3:
-        return None
-    
-    hydrogen = next((atom for atom in selected_atoms if atom.element.name == 'H'), None)
-    if not hydrogen:
-        return None  
-    
-    non_hydrogens = [atom for atom in selected_atoms if atom != hydrogen]
-    if len(non_hydrogens) != 2:
-        return None, None
-    
-    donor = next((atom for atom in hydrogen.neighbors if atom in non_hydrogens), None)
-    if not donor:
-        return None, None  
-
-    acceptor = next((atom for atom in non_hydrogens if atom != donor), None)
-    if not acceptor:
-        return None, None  
-    try:
-        return [atoms_to_index[donor], atoms_to_index[hydrogen], atoms_to_index[acceptor]], [donor,hydrogen,acceptor]
-    except KeyError:
-        return None, None
 
 
 
 
 #╔═════════════════════════════════════════════════════════════════════════════╗
-#║                             Class wrappers                                  ║
+#║                             Class Helpers                                   ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
 
 
@@ -2094,68 +1872,39 @@ class RenderBindingSite:
         self.render_site()
         
 
-class ChemEMMarkerMouseMode(MouseMode):
-    def __init__(self,  chemem):
-        super().__init__(chemem.session)
-        self._marker_placement_active = True
-        self.name = 'chemem_marker'
-        self.original_mode = MoveMarkersPointMouseMode(self.session)
-        #self.marker_wrapper = ChemEMMarker(self.session)
-        self.chemem = chemem
-        
-        
-    def enable(self):
-        self._marker_placement_active = True
-        self.session.logger.info("Marker placement mode activated. Right-click to place a marker.")
 
-    def disable(self):
-        self._marker_placement_active = False
-        self.session.logger.info("Marker placement mode deactivated.")
-
-    def mouse_down(self, event):
-        if self._marker_placement_active:
-            x, y = event.position()
-            self.place_marker(x, y, event)
-            self._marker_placement_active = False  # Deactivate after placing the marker
-            self.session.ui.mouse_modes.bind_mouse_mode(mouse_button="right", mode=self.original_mode)
-            
-    
-    def place_marker(self, x, y, event):
-        # Convert screen coordinates to scene coordinates
-        view = self.session.main_view
-        xyz1, xyz2 = view.clip_plane_points(x, y)
-        xyz = .5 * (xyz1 + xyz2)
-        print('MRK1')
-        self.chemem.set_marker_position(xyz)
-        #self.session.models.add([self.marker_wrapper])
-        #self.marker_wrapper.place_marker(xyz)
-        #self.session.metadata = self.marker_wrapper
-        #parameter = BindingSiteParameter.get_from_marker(self.marker_wrapper,self.chemem)
-        #pass to chemem 
-        #self.chemem.site_from_marker(parameter)
-        
-
-        
-class ChemEMMarker(MarkerSet):
-    def __init__(self, session):
-        super().__init__(session)
-
-    def place_marker(self, position):
-        print(position)
-        marker = self.create_marker(position, (136, 179, 198, 255), 1.0)  # Red color, size 1.0
-        
-        print(type(marker))
-        #self.add_marker(marker)
-        
-
-def activate_marker_placement(chemem, parameter):
-    #original_mode = chemem.session.ui.mouse_modes.mode(button="right")
-    mode = ChemEMMarkerMouseMode(chemem)
-    chemem.session.ui.mouse_modes.bind_mouse_mode(mouse_button="right", mode=mode)   
 
 #╔═════════════════════════════════════════════════════════════════════════════╗
 #║                             Helper functions                                ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
+
+
+
+def get_hbond_tug_index(model, atoms_to_index):
+    selected_atoms = [atom for residue in model.residues for atom in residue.atoms if atom.selected]
+
+    if len(selected_atoms) != 3:
+        return None
+    
+    hydrogen = next((atom for atom in selected_atoms if atom.element.name == 'H'), None)
+    if not hydrogen:
+        return None  
+    
+    non_hydrogens = [atom for atom in selected_atoms if atom != hydrogen]
+    if len(non_hydrogens) != 2:
+        return None, None
+    
+    donor = next((atom for atom in hydrogen.neighbors if atom in non_hydrogens), None)
+    if not donor:
+        return None, None  
+
+    acceptor = next((atom for atom in non_hydrogens if atom != donor), None)
+    if not acceptor:
+        return None, None  
+    try:
+        return [atoms_to_index[donor], atoms_to_index[hydrogen], atoms_to_index[acceptor]], [donor,hydrogen,acceptor]
+    except KeyError:
+        return None, None
 
 
 def build_model_without_ligands(model):
@@ -2253,14 +2002,6 @@ def get_chemem_paths():
             all_paths.append(chemem_executable)
             
     return [PathParameter(i,i) for i in all_paths]
-
-# Example usage
-anaconda_path = find_anaconda_path()
-if anaconda_path:
-    print(f"Anaconda is installed at: {anaconda_path}")
-else:
-    print("Anaconda installation not found.")
-
 
 def generate_unique_id():
     return str(uuid.uuid4())

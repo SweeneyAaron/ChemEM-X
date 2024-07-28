@@ -299,18 +299,18 @@ class Solution:
         self.pdb_object = open_pdb_model(self.session, pdb_path)
         self.score = score
         self.all_matched_atoms = []
+        
         self.id = str(uuid.uuid4())
+        self.match_atoms_to_ligand()
         
         
     def match_atoms_to_ligand(self):
         
         for ligand in self.rdkit_mol_objects:
             ligand_positions = ligand.GetConformer().GetPositions() 
-            ligand_atoms = [i.GetSymobl() for i in ligand.GetAtoms()]
-            
-            
-            
-            for residue in self.pdb_object:
+            ligand_atoms = [i.GetSymbol() for i in ligand.GetAtoms()]
+   
+            for residue in self.pdb_object.residues:
                 #!should include Hs??
                 atoms_no_hydrogen = [atom for atom in residue.atoms if atom.element.name != 'H']
                 if len(atoms_no_hydrogen) == len(ligand_atoms):

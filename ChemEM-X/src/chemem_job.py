@@ -31,6 +31,7 @@ class SimulationJob(Task):
         self.hbond_tug = None
         #[15879, np.array([128.76779874, 130.55397987, 173.85587692])]
         self.step_size = 5
+        
     def terminate(self):
         """Terminate this task.
 
