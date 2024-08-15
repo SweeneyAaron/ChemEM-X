@@ -43,4 +43,20 @@ class DragCoordinatesMode(MouseMode):
         pick = view.picked_object(x, y)
         
         return pick
+
+PLACE_LIGAND = 'place_ligand'
+
+class PickPoint(MouseMode):
+    name = 'pick_ligand_position'
+    def __init__(self, session, atom):
+        self.session = session 
+        self.atom = atom
+        self.end_coord = None
+        
+    def mouse_down(self, event):
+        x, y = event.position()
+        puller = Puller2D(x,y)
+        _ , self.end_coord = puller.pull_to_point(self.atom)
+        self.session.triggers.activate_trigger(PLACE_LIGAND, self)
+        
         

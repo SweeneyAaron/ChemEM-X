@@ -11,10 +11,14 @@ from chimerax.core.tasks import Job, Task, TaskState
 import json
 import datetime
 import numpy as np
+from openmm import unit
+
 
 CHEMEM_JOB = 'chemem'
 EXPORT_SIMULATION = 'chemem.export_simulation'
+EXPORT_LIGAND_SIMULATION = 'chemem.export_ligand_simulation'
 SIMULATION_JOB = 'chemem-X simulation'
+EXPORT_COVELENT_LIGAND_SIMULATION = 'chemem.export_covelent_ligand_simulation'
 
 class SimulationJob(Task):
     def __init__(self, session, chemem, job_type = SIMULATION_JOB):
@@ -29,6 +33,9 @@ class SimulationJob(Task):
         
         self.tug = None
         self.hbond_tug = None
+        self.pipi_p_tug = None
+        self.simulated_anneling = None
+        self.minimise = None
         #[15879, np.array([128.76779874, 130.55397987, 173.85587692])]
         self.step_size = 5
         
@@ -48,10 +55,13 @@ class SimulationJob(Task):
             
         self.state = TaskState.TERMINATING
     
-    
+   
     def run(self, *args, **kw):
         
         self.started = True
+        #check that the chimerax atom positions match the simulation atom positions!
+        self.chemem.simulation.chimera_x_atom_to_simulation_consistancy(self.chemem.simulation_model, 
+                                                                        self.chemem.atoms_to_position_index_as_dic)
         self.chemem.simulation.minimise_system()
         self.chemem.update_simulation_model()
         self.step_count = 0
@@ -68,7 +78,7 @@ class SimulationJob(Task):
                 self.chemem.update_simulation_model()
                 self._set_temp = None
             
-            
+            #Tug---------------------------
             if self.tug is not None:
                 
                 if self.tug.atom_idx is not None:
@@ -82,6 +92,7 @@ class SimulationJob(Task):
                     self.tug.atom_idx = None
                         #set the tug stuff back to None
             
+            #-----HBondTug--------------
             if self.hbond_tug is not None:
                 
                 self.chemem.simulation.update_hbond_tug_force_for_atom(self.hbond_tug[0],
@@ -92,6 +103,89 @@ class SimulationJob(Task):
                     self.chemem.simulation.step(self.step_size)
                     self.chemem.update_simulation_model()
                 self.hbond_tug = None
+                
+            #-----PiPi-PTug--------------
+            if self.pipi_p_tug is not None:
+                self.chemem.simulation.update_pipi_p_tug(self.pipi_p_tug[0],
+                                                         dist_k = self.pipi_p_tug[1],
+                                                         angle_k = self.pipi_p_tug[2],
+                                                         offset_k = self.pipi_p_tug[3])
+                for num in range(20):
+                    #run for a while incase the simulation is paused
+                    self.chemem.simulation.step(self.step_size)
+                    self.chemem.update_simulation_model()
+                self.pipi_p_tug = None
+            
+            
+            #-----minmise
+            if self.minimise is not None:
+                self.chemem.simulation.minimise_system()
+                self.chemem.update_simulation_model()
+                self.minimise = None
+            
+            #----simulated Anneling------
+            if self.simulated_anneling is not None:
+
+                
+                #initial heating of the system!!
+                for temp in range(self.simulated_anneling.startTemp, self.simulated_anneling.normTemp, self.simulated_anneling.tempStep):
+                    
+                    self.chemem.simulation._set_temp(temp)
+                    print('TEMP', temp)
+                    for _ in range(0, self.simulated_anneling.initialHeatingInterval, self.step_size):
+                        
+                        self.chemem.simulation.step(self.step_size)
+                        self.chemem.update_simulation_model() 
+                    
+                #simulation cycles!!
+                for _ in range(self.simulated_anneling.simAnnCycles): #add this!!
+                    
+                    print('increase temp...')
+                    #increase temp to top step
+                    for temp in range(self.simulated_anneling.normTemp, self.simulated_anneling.topTemp, self.simulated_anneling.tempStep):#add this 
+                        
+                        self.chemem.simulation.set_tempreture(temp)
+                        #time at each tempreture !
+                        for _ in range(0, self.simulated_anneling.equilibriumTime, self.step_size):
+                            
+                            self.chemem.simulation.step(self.step_size)
+                            self.chemem.update_simulation_model() 
+                    
+                    print('Hold...')
+                    #hold temp at top step
+                    for _ in range(0, self.simulated_anneling.holdTopTempInterval, self.step_size):
+                        self.chemem.simulation.step(self.step_size)
+                        self.chemem.update_simulation_model()
+                    
+                    print('decrese_temp...')
+                    #decrease temp
+                    for temp in range(self.simulated_anneling.topTemp, self.simulated_anneling.normTemp, self.simulated_anneling.tempStep):
+                        self.chemem.simulation.set_tempreture(temp)
+                        
+                        for _ in range(0, self.simulated_anneling.equilibriumTime, self.step_size):
+                            
+                            self.chemem.simulation.step(self.step_size)
+                            self.chemem.update_simulation_model() 
+                    
+                    #minimisation 
+                    print('minimising')
+                    if self.simulated_anneling.localMinimisation:
+                        self.chemem.simulation.minimise_system()
+                        
+                    
+                
+                self.simulated_anneling = None
+                
+                
+                    
+                    
+                    
+                    
+                    
+                        
+                    
+                    
+                    
             
             #if self.step_count == 250:
             #    print('HBOND TUG TEST TIME')
@@ -237,4 +331,11 @@ class JobHandler:
         if job_id in self.jobs:
             return self.jobs[job_id].status
         return None
+    
+    def simulation_job_running(self):
+        for job in self.jobs.values():
+            if job.job_type == SIMULATION_JOB:
+                if job.running:
+                    return True
+        return False
 

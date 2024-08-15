@@ -8,13 +8,131 @@ Created on Wed Jul 10 19:51:00 2024
 
 from dimorphite_dl import DimorphiteDL
 from rdkit import Chem
-from rdkit.Chem import Draw
+from rdkit.Chem import Draw, rdchem, AllChem
 from rdkit.Geometry import Point3D
+
 import tempfile
 import os
 import numpy as np
 from chimerax.core.commands import run 
 import uuid
+
+
+RD_PROTEIN_SMILES = {'CYS': ('N[C@H](C=O)CS', {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'SG': 5}),
+ 'MET': ('CSCC[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG': 5, 'SD': 6, 'CE': 7}),
+ 'GLY': ('NCC=O', {'N': 0, 'CA': 1, 'C': 2, 'O': 3}),
+ 'ASP': ('N[C@H](C=O)CC(=O)O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG': 5, 'OD1': 6, 'OD2': 7}),
+ 'ALA': ('C[C@H](N)C=O', {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4}),
+ 'VAL': ('CC(C)[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG1': 5, 'CG2': 6}),
+ 'PRO': ('O=C[C@@H]1CCCN1',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG': 5, 'CD': 6}),
+ 'PHE': ('N[C@H](C=O)Cc1ccccc1',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD1': 6,
+   'CD2': 7,
+   'CE1': 8,
+   'CE2': 9,
+   'CZ': 10}),
+ 'ASN': ('NC(=O)C[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG': 5, 'OD1': 6, 'ND2': 7}),
+ 'THR': ('C[C@@H](O)[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'OG1': 5, 'CG2': 6}),
+ 'HIS': ('N[C@H](C=O)Cc1c[nH]c[nH+]1',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'ND1': 6,
+   'CD2': 7,
+   'CE1': 8,
+   'NE2': 9}),
+ 'GLN': ('NC(=O)CC[C@H](N)C=O',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD': 6,
+   'OE1': 7,
+   'NE2': 8}),
+ 'ARG': ('NC(=[NH2+])NCCC[C@H](N)C=O',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD': 6,
+   'NE': 7,
+   'CZ': 8,
+   'NH1': 9,
+   'NH2': 10}),
+ 'TRP': ('N[C@H](C=O)Cc1c[nH]c2ccccc12',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD1': 6,
+   'CD2': 7,
+   'NE1': 8,
+   'CE2': 9,
+   'CE3': 10,
+   'CZ2': 11,
+   'CZ3': 12,
+   'CH2': 13}),
+ 'ILE': ('CC[C@H](C)[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG1': 5, 'CG2': 6, 'CD1': 7}),
+ 'SER': ('N[C@@H](C=O)CO',
+  {'N': 0, 'CA': 1, 'CB': 2, 'OG': 3, 'C': 4, 'O': 5}),
+ 'LYS': ('N[C@H](C=O)CCCC[NH3+]',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD': 6,
+   'CE': 7,
+   'NZ': 8}),
+ 'LEU': ('CC(C)C[C@H](N)C=O',
+  {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'CG': 5, 'CD1': 6, 'CD2': 7}),
+ 'GLU': ('N[C@H](C=O)CCC(=O)O',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD': 6,
+   'OE1': 7,
+   'OE2': 8}),
+ 'TYR': ('N[C@H](C=O)Cc1ccc(O)cc1',
+  {'N': 0,
+   'CA': 1,
+   'C': 2,
+   'O': 3,
+   'CB': 4,
+   'CG': 5,
+   'CD1': 6,
+   'CD2': 7,
+   'CE1': 8,
+   'CE2': 9,
+   'CZ': 10,
+   'OH': 11})}
+
 
 
 def smiles_is_valid(smiles):
@@ -381,12 +499,105 @@ class Solution:
             
     def string(self):
         return f'{self.pdb_object.name} : ChemEM-score {self.score}'
-            
-        
+
+
+def RW_mol_from_smiles(smiles):
+    return Chem.RWMol(Chem.MolFromSmiles(smiles))
+
+def draw_molecule_with_atom_indices(mol, size=(500, 500), dpi=300):
+    # Set atom indices as labels
+    for atom in mol.GetAtoms():
+        atom.SetProp('molAtomMapNumber', str(atom.GetIdx()))
     
+    # Draw the molecule with specified size and DPI
+    img = Draw.MolToImage(mol, size=size, kekulize=True)
     
+    # Convert the image to a higher resolution
+    img = img.resize((size[0] * dpi // 72, size[1] * dpi // 72), resample=0)
+    return img
+
+
+def modify_bond_order(rwmol, bonds_to_modify):
+    for atom_idx1, atom_idx2, new_bond_type in bonds_to_modify:
+        bond = rwmol.GetBondBetweenAtoms(atom_idx1, atom_idx2)
+        if bond is not None:
+            rwmol.RemoveBond(atom_idx1, atom_idx2)
+            rwmol.AddBond(atom_idx1, atom_idx2, new_bond_type)
+        else:
+            print(f"No bond found between atom {atom_idx1} and {atom_idx2}")
+
+def remove_atoms(rwmol, atom_indices):
+    # Sort atom indices in reverse order to avoid index shifting issues
+    for atom_idx in sorted(atom_indices, reverse=True):
+        rwmol.RemoveAtom(atom_idx)
+
+def remove_atoms(rwmol, atom_indices):
+    # Sort atom indices in reverse order to avoid index shifting issues
+    for atom_idx in sorted(atom_indices, reverse=True):
+        rwmol.RemoveAtom(atom_idx)
+
+def combine_molecules_and_react(ligand, 
+                                residue, 
+                                ligand_atom_idx, 
+                                residue_atom_idx, 
+                                bond_type,
+                                protein_bonds_to_change,
+                                ligand_bonds_to_change,
+                                protein_atoms_to_remove,
+                                ligand_atoms_to_remove):
     
+    ligand.GetAtomWithIdx(ligand_atom_idx).SetNumExplicitHs(0)
+    residue.GetAtomWithIdx(residue_atom_idx).SetNumExplicitHs(0)
     
+    combined_mol = Chem.CombineMols(ligand, residue)
+    combined_rwmol = Chem.RWMol(combined_mol)
+    residue_new_zero_idx = ligand.GetNumAtoms()
+    residue_bond_point = residue_atom_idx + residue_new_zero_idx
+    combined_rwmol.AddBond(ligand_atom_idx, residue_bond_point , bond_type)
     
+
+    for idx1, idx2, bond in protein_bonds_to_change:
+        idx1 += residue_new_zero_idx 
+        idx2 += residue_new_zero_idx 
+        modify_bond_order(combined_rwmol, [(idx1,idx2, bond)])
+    
+   
+    modify_bond_order(combined_rwmol, ligand_bonds_to_change)
+    
+    protein_atoms_to_remove = [i + residue_new_zero_idx for i in protein_atoms_to_remove]
+    remove_atoms(combined_rwmol, protein_atoms_to_remove)
+    remove_atoms(combined_rwmol, ligand_atoms_to_remove)
+    
+    Chem.SanitizeMol(combined_rwmol)
+    # Convert to SMILES and return
+    product_smiles = Chem.MolToSmiles(combined_rwmol)
+    
+    return product_smiles, combined_rwmol
+    
+
+def save_image_temporarily(image):
+    # Create a temporary file with the suffix '.png' to ensure the file format is correct
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+
+    # Save the image to the temporary file
+    image.save(temp_file.name)
+
+    # Close the file (important to release the file handle)
+    temp_file.close()
+
+    # Return the path to the temporary file
+    return temp_file
+
+def remove_temporary_file(temp_file):
+    try:
+        os.remove(temp_file)
+        print(f"File {temp_file} has been successfully removed.")
+    except FileNotFoundError:
+        print(f"No file found at {temp_file}. Nothing to remove.")
+    except PermissionError:
+        print(f"Permission denied: cannot delete {temp_file}.")
+    except Exception as e:
+        print(f"An error occurred deleting image {temp_file}: {e}.")
+
     
     
