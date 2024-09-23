@@ -3,7 +3,7 @@ from openmm import XmlSerializer
 from openmm import LangevinIntegrator, Platform
 from openmm import app
 from openmm import unit
-from openmm import MonteCarloBarostat, XmlSerializer, app, unit,CustomNonbondedForce, CustomCompoundBondForce,CustomAngleForce, Continuous3DFunction, vec3, Vec3, CustomCentroidBondForce     
+from openmm import MonteCarloBarostat, XmlSerializer, app, unit,CustomNonbondedForce, CustomCompoundBondForce, CustomBondForce, CustomAngleForce, Continuous3DFunction, vec3, Vec3, CustomCentroidBondForce, PeriodicTorsionForce, CustomTorsionForce
 from openmm import LocalEnergyMinimizer
 from scipy.ndimage import gaussian_filter
 from openmm.unit.quantity import Quantity
@@ -11,9 +11,12 @@ import os
 import numpy as np
 from chimerax.atomic.structure import AtomicStructure
 from chimerax.geometry import distance as get_distance
+from chimerax.dssp import compute_ss
 from rdkit import Chem
 from openmm.app import  NoCutoff, HBonds
 from chimerax.core.commands import run 
+
+
 
 RESIDUE_NAMES = ['CYS','MET','GLY','ASP','ALA','VAL','PRO','PHE','ASN','THR',
                  'HIS','GLN','ARG','TRP','ILE','SER','LYS','LEU','GLU','TYR']
@@ -44,7 +47,7 @@ class Simulation:
         
         self.forces = {}
         self.force_group = 0
-        
+        self.active_constraints = []
         #hbond tugs 
         self.hbond_tug_atoms = {}
         self.pipi_p_tug_rings = {}
@@ -76,8 +79,8 @@ class Simulation:
             for atom in residue.atoms:
                 
                 if atom not in atoms_to_position_index_as_dic:
-                    com = f'del {atom.atomspec}'
-                    run(self.session, com)
+                    #com = f'del {atom.atomspec}'
+                    #run(self.session, com)
                     continue
                 
                 atom_index = atoms_to_position_index_as_dic[atom]
@@ -114,20 +117,51 @@ class Simulation:
             self.densmap.display = False 
             self.densmap.display = True
     
-    def get_model_from_complex_structure(self, chimerax_model):
-        #new_model = AtomicStructure(self.session)
+    
+    def get_model_from_complex_structure(self, chimerax_model, distance_threshold=0.01):
+        complex_structure = self.complex_structure
         atom_to_index = []
-        
-        
-        for sim_residue, chimera_residue in zip(self.complex_structure.residues, chimerax_model.residues):
 
-            for atom in chimera_residue.atoms:
-                for sim_atom in sim_residue.atoms:
-                    if atom.name == sim_atom.name:
-                        atom_to_index.append([atom, sim_atom.idx])
-        
-        #get hbond stuff
-        
+        # Build a mapping from (residue name, atom name) to simulation atoms
+        sim_atoms_dict = {}
+        for sim_atom in complex_structure.atoms:
+            key = (sim_atom.residue.name, sim_atom.name)
+            sim_atoms_dict.setdefault(key, []).append(sim_atom)
+
+        # Build a mapping from (residue name, atom name) to ChimeraX atoms
+        chimerax_atoms_dict = {}
+        for atom in chimerax_model.atoms:
+            key = (atom.residue.name, atom.name)
+            chimerax_atoms_dict.setdefault(key, []).append(atom)
+
+        # Match atoms between ChimeraX model and simulation
+        for key, chimera_atoms in chimerax_atoms_dict.items():
+            sim_atoms = sim_atoms_dict.get(key, [])
+            if not sim_atoms:
+                continue  # No matching atoms in simulation
+
+            # For each ChimeraX atom, find the closest simulation atom
+            for atom in chimera_atoms:
+                min_distance = None
+                best_sim_atom = None
+                # Get ChimeraX atom position (assuming atom.coord exists)
+                
+                atom_pos = np.array(atom.coord)
+                
+
+                for sim_atom in sim_atoms:
+                    # Get simulation atom position from sim_atom.xx, sim_atom.xy, sim_atom.xz
+                    sim_atom_pos = np.array([sim_atom.xx, sim_atom.xy, sim_atom.xz])
+                    distance = np.linalg.norm(atom_pos - sim_atom_pos)
+
+                    if min_distance is None or distance < min_distance:
+                        min_distance = distance
+                        best_sim_atom = sim_atom
+
+                if min_distance is not None and min_distance < distance_threshold:
+                    
+                    atom_to_index.append([atom, best_sim_atom.idx])
+
         return chimerax_model, atom_to_index
     
     def set_ring_groups(self, chimerax_model, atoms_to_idx):
@@ -141,12 +175,150 @@ class Simulation:
             
         for ring in flattened_rings:
             atoms = ring.atoms
-            openff_indexes = sorted([atoms_to_idx[i] for i in atoms])
-            if openff_indexes not in ring_idxs:
+            
+            openff_indexes = sorted([atoms_to_idx[i] for i in atoms if i in atoms_to_idx])
+            if len(openff_indexes) != len(atoms):
+                continue
+            
+            elif openff_indexes not in ring_idxs:
                 ring_idxs.append(openff_indexes)
             
         self.ring_idxs = ring_idxs
         #TODO!! other things!!
+    
+    def set_anchor_residues(self, chimerax_model, selected_atom_data, atoms_to_idx):
+        residue_atoms_not_selected = []
+        for atom_vector in selected_atom_data['res_atoms_not_selected'].values():
+            residue_atoms_not_selected  += [atoms_to_idx[i] for i in atom_vector if i in atoms_to_idx]
+        
+        
+        self.residue_atoms_not_selected = residue_atoms_not_selected
+        
+        anchor_atoms = []
+        for residue in selected_atom_data['extra_residues']:
+            anchor_atoms += [atoms_to_idx[i] for i in residue.atoms if i in atoms_to_idx]
+        
+        self.anchor_atoms = anchor_atoms
+            
+        
+    
+    def set_SSE_elements(self, chimerax_model, atoms_to_idx):
+        
+        def select_and_color(residues, rd):
+            for residue in residues:
+                for atom in residue.atoms:
+                    ca = rd[atom.idx] 
+                    ca.selected = True
+        rd = {i : j for j,i in atoms_to_idx.items()}
+        compute_ss(chimerax_model)
+        
+        ss_ids = {}
+        ss_id_to_sse = {}
+        
+        ss_ids_helix = {}
+        ss_id_to_sse_helix = {}
+        
+        select_atoms = []
+        for residue in chimerax_model.residues:
+            
+            if residue.ss_type == 1:
+                if residue.ss_id in ss_ids_helix:
+                    ss_ids_helix[residue.ss_id].append(residue)
+                else:
+                    ss_ids_helix[residue.ss_id] = [residue]
+                    ss_id_to_sse_helix[residue.ss_id] = residue.ss_type
+                    
+            
+            if residue.ss_type > 0:
+                if residue.ss_id in ss_ids:
+                    ss_ids[residue.ss_id].append(residue)
+                else:
+                    ss_ids[residue.ss_id] = [residue]
+                    ss_id_to_sse[residue.ss_id] = residue.ss_type
+        
+        ss_ids_openff = {}
+
+        for ss in ss_ids:
+            openff_residues = []
+            residues = ss_ids[ss]
+            for residue in residues:
+                for atom in residue.atoms:
+                    if atom in atoms_to_idx:
+                        atom_idx = atoms_to_idx[atom]
+                        
+
+                        openff_residues.append(self.complex_structure.atoms[atom_idx].residue)
+                        break
+            
+            
+            ss_ids_openff[ss] = openff_residues 
+        
+        
+        ss_ids_openff_helix = {}
+        
+        for ss in ss_ids_helix:
+            openff_residues_helix = []
+            residues = ss_ids_helix[ss]
+            for residue in residues:
+                for atom in residue.atoms:
+                    if atom in atoms_to_idx:
+                        atom_idx = atoms_to_idx[atom]
+                        
+
+                        openff_residues_helix.append(self.complex_structure.atoms[atom_idx].residue)
+                        break
+            
+            
+            ss_ids_openff_helix[ss] = openff_residues_helix
+        
+       
+        
+        def is_bonded_to(residue1, residue2):
+            for atom in residue1.atoms:
+                if atom.name == 'C':
+                    for next_atom in atom.bond_partners:
+                        if next_atom.name == 'N' and next_atom.residue.idx == residue2.idx:
+                            return True
+            return False
+        
+        helices = []
+        for i in ss_ids_openff_helix:
+            helices += ss_ids_openff_helix[i]
+        helices = sorted(helices, key = lambda x: x.idx)
+        
+        sse_helices = {}
+        current_helix = []
+        helix_id = 1
+    
+        for i, residue in enumerate(helices):
+            if not current_helix:
+                # Start a new helix
+                current_helix.append(residue)
+            else:
+                # Check if the current residue is bonded to the previous one
+                if is_bonded_to(current_helix[-1], residue):
+                    current_helix.append(residue)
+                
+                else:
+                    # If not bonded, finalize the current helix and start a new one
+                    sse_helices[f"helix_{helix_id}"] = current_helix
+                    helix_id += 1
+                    current_helix = [residue]
+        
+        if current_helix:
+            sse_helices[f"helix_{helix_id}"] = current_helix
+            
+        
+        self.sse_residues = ss_ids_openff 
+        self.sse_types = ss_id_to_sse 
+        #self.sse_residues_helix =  ss_ids_openff_helix
+        self.sse_residues_helix = sse_helices
+
+    def add_constraint(self, addConstraint):
+        addConstraint.apply(self)
+        self.active_constraints.append(addConstraint.name)
+        
+                
         
     
     def add_force(self, AddForce):
@@ -157,6 +329,7 @@ class Simulation:
         self.force_group += 1
         self.forces[force_idx] = force
         setattr(self, AddForce.name, force)
+        print(f'{AddForce.name} added to system')
         
     def remove_force(self, force_group):
         self.complex_system.removeForce(force_group) #-1) ?
@@ -368,6 +541,394 @@ class MapBias(Force):
         
         return d3d_func
 
+class SSERigidBodyBBConstraint(Force):
+    name = 'rigid_body_force'
+    @classmethod 
+    def apply(cls, 
+              simulation_object,
+              ):
+        for sse_id, residues in simulation_object.sse_residues.items():
+            
+            for residue in residues:
+                
+                atom_N_curr = None
+                atom_C_curr = None 
+                atom_CA_curr = None 
+                atom_N_next = None 
+                atom_C_prev = None
+                for atom in residue.atoms:
+                    if atom.name == 'N':
+                        atom_N_curr = atom 
+                    elif atom.name == 'C':
+                        atom_C_curr = atom 
+                    
+                    elif atom.name == 'CA':
+                        atom_CA_curr = atom 
+                
+                
+                if atom_C_curr is not None:
+                    for atom in atom_C_curr.bond_partners:
+                        if atom.name == 'N' and atom.residue.idx != residue.idx:
+                            atom_N_next = atom 
+                
+                if atom_N_next is not None:
+                    for atom in atom_N_next.residue.atoms:
+                        if atom.name == 'C':
+                            atom_C_next = atom 
+                        elif atom.name == 'CA':
+                            atom_CA_next = atom
+                
+                if atom_N_curr is not None and atom_N_next is not None:
+                    distance = cls.compute_distance(simulation_object.complex_structure.positions, atom_N_curr, atom_N_next)
+                    simulation_object.complex_system.addConstraint(atom_N_curr.idx, atom_N_next.idx, distance)
+                
+                if atom_C_curr is not None and atom_C_next is not None:
+                    distance = cls.compute_distance(simulation_object.complex_structure.positions, atom_C_curr, atom_C_next)
+                    simulation_object.complex_system.addConstraint(atom_C_curr.idx, atom_C_next.idx, distance)
+                
+                if atom_CA_curr is not None and atom_CA_next is not None:
+                    distance = cls.compute_distance(simulation_object.complex_structure.positions, atom_CA_curr, atom_CA_next)
+                    #print('DIST', distance, atom_CA_curr, atom_CA_next)
+                    simulation_object.complex_system.addConstraint(atom_CA_curr.idx, atom_CA_next.idx, distance)
+        return None
+            
+    @staticmethod
+    def compute_distance(positions, atom1, atom2):
+        """
+        Compute the distance between two atoms using their positions.
+        """
+        pos1 = positions[atom1.idx]
+        pos2 = positions[atom2.idx]
+        return np.sqrt((pos1.x - pos2.x)**2 + (pos1.y - pos2.y)**2 + (pos1.z - pos2.z)**2) / 10
+
+
+class CentroidSSEForce(Force):
+    name = 'centroid_sse_force'
+    @classmethod 
+    def apply(cls,
+              simulation_object,
+              k = 1000):
+        
+        force = cls.get_force()
+        for sse_id, residues in simulation_object.sse_residues.items():
+            atom_g1_indexs = []
+            atom_g2_indexes = []
+            for residue in residues:
+                pass
+            
+            
+    @staticmethod 
+    def get_force():
+        force = CustomCentroidBondForce(2, "k*(distance(g1, g2) - r0)^2")
+        force.addGlobalParameter("k", 1000.0 * unit.kilojoule_per_mole / unit.nanometer**2)
+        force.addPerBondParameter("r0")
+        return force 
+
+class HelixHbondForce(Force):
+    name = 'Helix_hbond_force'
+    @classmethod 
+    def apply(cls, 
+              simulation_object,
+              k = 500 * unit.kilojoule_per_mole / unit.nanometer**2):
+        force = cls.get_force(k) 
+        
+        for sse_id, residues in simulation_object.sse_residues_helix.items():
+            for residue in residues:
+                
+                atom_O_curr = None
+                atom_N_next = None 
+                
+                
+                for atom in residue.atoms:
+                    if atom.name == 'O':
+                        atom_O_curr = atom 
+                    
+            
+                
+                plus_4_residue_index = residue.idx + 4 
+                plus_4_residue = None
+                try:
+                    plus_4_residue = simulation_object.complex_structure.residues[plus_4_residue_index]
+                
+                except IndexError:
+                    pass
+                
+                if plus_4_residue in residues:
+                    for atom in plus_4_residue.atoms:
+                        
+                        if atom.name == 'N':
+                            atom_N_next = atom 
+                        
+                
+                if atom_O_curr is not None and atom_N_next is not None:
+                    dist = cls.compute_distance(simulation_object.complex_structure.positions, atom_O_curr, atom_N_next)
+                    print('HB_DIST', dist, atom_O_curr, atom_N_next)
+                    force.addBond(atom_O_curr.idx, atom_N_next.idx, [dist * unit.nanometer])
+        return force
+    
+    @staticmethod
+    def compute_distance(positions, atom1, atom2):
+        """
+        Compute the distance between two atoms using their positions.
+        """
+        pos1 = positions[atom1.idx]
+        pos2 = positions[atom2.idx]
+        return np.sqrt((pos1.x - pos2.x)**2 + (pos1.y - pos2.y)**2 + (pos1.z - pos2.z)**2) / 10
+    
+                
+                
+    @staticmethod 
+    def get_force(k = 500 * unit.kilojoule_per_mole / unit.nanometer**2):
+        force = CustomBondForce("0.5 * k * (r - r0)^2")
+        #force.addGlobalParameter("r0", 2.9 * unit.nanometer)
+        force.addGlobalParameter("k", k)
+        force.addPerBondParameter("r0")
+        return force
+
+
+
+
+class SSE_force(Force):
+    name = 'SSE_force'
+    @classmethod 
+    def apply(cls, 
+              simulation_object,
+              k = 100):
+        
+        sse_force = cls.get_force() 
+        #TODO !! non-bonded
+        for sse_id, residues in simulation_object.sse_residues.items():
+            
+            for residue in residues:
+                
+                atom_N_curr = None
+                atom_C_curr = None 
+                atom_CA_curr = None 
+                atom_N_next = None 
+                atom_C_prev = None
+                for atom in residue.atoms:
+                    if atom.name == 'N':
+                        atom_N_curr = atom 
+                    elif atom.name == 'C':
+                        atom_C_curr = atom 
+                    
+                    elif atom.name == 'CA':
+                        atom_CA_curr = atom 
+                
+                if atom_C_curr is not None:
+                    for atom in atom_C_curr.bond_partners:
+                        if atom.name == 'N' and atom.residue.idx != residue.idx:
+                            atom_N_next = atom 
+                
+                if atom_N_curr is not None:
+                    for atom in atom_N_curr.bond_partners:
+                        if atom.name =='C' and atom.residue.idx != residue.idx:
+                            atom_C_prev = atom 
+                
+                if atom_N_next is not None:
+                    for atom in atom_N_next.residue.atoms:
+                        if atom.name == 'CA' and atom.residue.idx != residue.idx:
+                            atom_CA_next = atom
+                
+                # Add phi angle restraint
+                if not None in [atom_C_prev, atom_N_curr, atom_CA_curr, atom_C_curr]:
+                    sse_force.addTorsion(atom_C_prev.idx, atom_N_curr.idx, atom_CA_curr.idx, atom_C_curr.idx, 1, 0*unit.radians, k*unit.kilojoules_per_mole)
+                
+                # Add psi angle restraint
+                if not None in [atom_N_curr, atom_CA_curr, atom_C_curr, atom_N_next]:
+                    sse_force.addTorsion(atom_N_curr.idx, atom_CA_curr.idx, atom_C_curr.idx, atom_N_next.idx, 1, 0*unit.radians, k*unit.kilojoules_per_mole)
+                
+                if not None in [atom_CA_curr, atom_C_curr, atom_N_next, atom_CA_next]:
+                    sse_force.addTorsion(atom_CA_curr.idx, atom_C_curr.idx, atom_N_next.idx, atom_CA_next.idx, 1, 0*unit.radians, k*unit.kilojoules_per_mole)
+                
+        return sse_force 
+                #GetPrevious atoms 
+                
+                
+                
+              
+        #sse_force.addTorsion(0, 4, 6, 9, 1, 0*radians, 100*kilojoules_per_mole)
+    
+    @staticmethod 
+    def get_force():
+        return PeriodicTorsionForce()
+
+
+class PhiAnglelForce(Force):
+    name = 'phi_angle_force'
+    @classmethod 
+    def apply(cls, 
+              simulation_object,
+              k = 10 * unit.kilocalories_per_mole / unit.radians**2):
+        
+        force = cls.get_force(k = k)
+        for sse_id, residues in simulation_object.sse_residues_helix.items():
+            for residue in residues:
+                
+                atom_N_curr = None
+                atom_C_curr = None 
+                atom_CA_curr = None 
+                atom_C_prev = None
+                for atom in residue.atoms:
+                    if atom.name == 'N':
+                        atom_N_curr = atom 
+                    elif atom.name == 'C':
+                        atom_C_curr = atom 
+                    
+                    elif atom.name == 'CA':
+                        atom_CA_curr = atom 
+                
+                if atom_N_curr is not None:
+                    for atom in atom_N_curr.bond_partners:
+                        if atom.name =='C' and atom.residue.idx != residue.idx:
+                            atom_C_prev = atom 
+                
+                # Add phi angle restraint
+                if not None in [atom_C_prev, atom_N_curr, atom_CA_curr, atom_C_curr]:
+                    
+                    theta0 = cls.calculate_dihedral(atom_C_prev, 
+                                                    atom_N_curr, 
+                                                    atom_CA_curr, 
+                                                    atom_C_curr,
+                                                    simulation_object.complex_structure.positions)
+                    force.addTorsion(atom_C_prev.idx, atom_N_curr.idx, atom_CA_curr.idx, atom_C_curr.idx, [theta0 * unit.radians])
+        return force
+            
+    
+    @staticmethod 
+    def get_force(k = 10 * unit.kilocalories_per_mole / unit.radians**2):
+        expr = "0.5* phi_k *min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535"
+        force = CustomTorsionForce(expr)
+        force.addGlobalParameter("phi_k", k)
+        force.addPerTorsionParameter("theta0")
+        return force
+    
+    @staticmethod 
+    def calculate_dihedral(a1, a2, a3, a4, positions):
+        """
+        Calculate the dihedral angle between four atoms in 3D space.
+    
+        Parameters:
+        atom1, atom2, atom3, atom4: numpy arrays
+            3D coordinates of the four atoms (as numpy arrays of shape (3,))
+    
+        Returns:
+        dihedral_angle: float
+            Dihedral angle in radians
+        """
+        atom1, atom2, atom3, atom4 = positions[a1.idx], positions[a2.idx], positions[a3.idx], positions[a4.idx]
+        atom1 = np.array([atom1.x, atom1.y, atom1.z])
+        atom2 = np.array([atom2.x, atom2.y, atom2.z])
+        atom3 = np.array([atom3.x, atom3.y, atom3.z])
+        atom4 = np.array([atom4.x, atom4.y, atom4.z])
+        
+        # Define vectors between atoms
+        b1 = atom2 - atom1
+        b2 = atom3 - atom2
+        b3 = atom4 - atom3
+    
+        # Calculate normals to the planes defined by the vectors
+        n1 = np.cross(b1, b2)
+        n2 = np.cross(b2, b3)
+    
+        # Normalize the normal vectors
+        n1 /= np.linalg.norm(n1)
+        n2 /= np.linalg.norm(n2)
+    
+        # Calculate the vector perpendicular to b2 in the plane formed by b1 and b3
+        m1 = np.cross(n1, b2 / np.linalg.norm(b2))
+    
+        # Calculate the dihedral angle using atan2 for proper sign
+        x = np.dot(n1, n2)
+        y = np.dot(m1, n2)
+        dihedral_angle = np.arctan2(y, x)
+    
+        return dihedral_angle
+
+class PsiAngleForce(PhiAnglelForce):
+    name = 'psi_angle_force'
+    @classmethod 
+    def apply(cls, 
+              simulation_object,
+              k = 10 * unit.kilocalories_per_mole / unit.radians**2):
+
+        force = cls.get_force(k = k)
+        for sse_id, residues in simulation_object.sse_residues_helix.items():
+            for residue in residues:
+                
+                atom_N_curr = None
+                atom_C_curr = None 
+                atom_CA_curr = None 
+                atom_N_next = None 
+
+                for atom in residue.atoms:
+                    if atom.name == 'N':
+                        atom_N_curr = atom 
+                    elif atom.name == 'C':
+                        atom_C_curr = atom 
+                    
+                    elif atom.name == 'CA':
+                        atom_CA_curr = atom 
+                
+                if atom_C_curr is not None:
+                    for atom in atom_C_curr.bond_partners:
+                        if atom.name == 'N' and atom.residue.idx != residue.idx:
+                            atom_N_next = atom 
+
+                # Add psi angle restraint
+                if not None in [atom_N_curr, atom_CA_curr, atom_C_curr, atom_N_next]:
+                    
+                    theta0 = cls.calculate_dihedral(atom_N_curr,
+                                                    atom_CA_curr,
+                                                    atom_C_curr, 
+                                                    atom_N_next,
+                                                    simulation_object.complex_structure.positions)
+                    
+                    force.addTorsion(atom_N_curr.idx, atom_CA_curr.idx, atom_C_curr.idx, atom_N_next.idx, [theta0 * unit.radians])
+        return force
+    
+    @staticmethod 
+    def get_force(k = 10 * unit.kilocalories_per_mole / unit.radians**2):
+        expr = "0.5* psi_k *min(dtheta, 2*pi-dtheta)^2; dtheta = abs(theta-theta0); pi = 3.1415926535"
+        force = CustomTorsionForce(expr)
+        force.addGlobalParameter("psi_k", k)
+        force.addPerTorsionParameter("theta0")
+        return force
+
+
+class AnchorAtoms(Force):
+    name ='anchor_force'
+    @classmethod 
+    def apply(cls,
+              simulation_object,
+              k = 5000):
+        
+        anchor_force = cls.get_force(k=k)
+        
+        for atom_idx in simulation_object.anchor_atoms:
+            atom = simulation_object.complex_structure[atom_idx]
+            x0, y0, z0 = Quantity(
+                value=[atom.xx, atom.xy, atom.xz], unit=unit.angstrom)
+            anchor_force.addBond([atom_idx], [x0, y0, z0])
+        
+        return anchor_force 
+
+    @staticmethod 
+    def get_force(k = 1000):
+        expr = "anchor_k * ((x1 - x0)^2 + (y1 - y0)^2 + (z1 - z0)^2)"
+        f = CustomCompoundBondForce(1, expr)
+        f.addGlobalParameter("anchor_k", 1000)
+        f.addPerBondParameter("x0")
+        f.addPerBondParameter("y0")
+        f.addPerBondParameter("z0")
+        return f
+
+
+
+
+
+
+
 class TugForce(Force):
     name = 'tug_force'
     @classmethod 
@@ -473,6 +1034,16 @@ class HbondAngleForce(Force):
     
 
 
+def get_mmpbsa_complex_system(complex_structure, implicit_solvent, constraints=HBonds):
+    
+    complex_system = complex_structure.createSystem(nonbondedMethod=NoCutoff,
+                                                     nonbondedCutoff=9.0 * unit.angstrom,
+                                                     constraints=constraints, 
+                                                     removeCMMotion=False, 
+                                                     implicitSolvent=implicit_solvent.value)
+    
+    return complex_system
+
 def get_complex_system(complex_structure, parameters = None):
     
     
@@ -487,7 +1058,6 @@ def get_complex_system(complex_structure, parameters = None):
     solvent = parameters.get_parameter('solvent')
     
         
-    
     if solvent is not None:
         complex_system = complex_structure.createSystem(
             nonbondedMethod=NoCutoff,
@@ -612,7 +1182,57 @@ def get_position_vector_from_atom(atom):
     n_quant = unit.quantity.Quantity(value=n_vec, unit=unit.angstrom)
     return n_quant
 
-def get_model_from_complex_structure(complex_structure, chimerax_model):
+
+
+def get_model_from_complex_structure(complex_structure, chimerax_model, distance_threshold=0.01):
+    atom_to_index = []
+
+    # Build a mapping from (residue name, atom name) to simulation atoms
+    sim_atoms_dict = {}
+    for sim_atom in complex_structure.atoms:
+        key = (sim_atom.residue.name, sim_atom.name)
+        sim_atoms_dict.setdefault(key, []).append(sim_atom)
+
+    # Build a mapping from (residue name, atom name) to ChimeraX atoms
+    chimerax_atoms_dict = {}
+    for atom in chimerax_model.atoms:
+        key = (atom.residue.name, atom.name)
+        chimerax_atoms_dict.setdefault(key, []).append(atom)
+
+    # Match atoms between ChimeraX model and simulation
+    for key, chimera_atoms in chimerax_atoms_dict.items():
+        sim_atoms = sim_atoms_dict.get(key, [])
+        if not sim_atoms:
+            continue  # No matching atoms in simulation
+
+        # For each ChimeraX atom, find the closest simulation atom
+        for atom in chimera_atoms:
+            min_distance = None
+            best_sim_atom = None
+            # Get ChimeraX atom position (assuming atom.coord exists)
+            
+            atom_pos = np.array(atom.coord)
+            
+
+            for sim_atom in sim_atoms:
+                # Get simulation atom position from sim_atom.xx, sim_atom.xy, sim_atom.xz
+                sim_atom_pos = np.array([sim_atom.xx, sim_atom.xy, sim_atom.xz])
+                distance = np.linalg.norm(atom_pos - sim_atom_pos)
+
+                if min_distance is None or distance < min_distance:
+                    min_distance = distance
+                    best_sim_atom = sim_atom
+
+            if min_distance is not None and min_distance < distance_threshold:
+                
+                atom_to_index.append([atom, best_sim_atom.idx])
+
+    return chimerax_model, atom_to_index
+
+
+
+
+def get_model_from_complex_structure_old(complex_structure, chimerax_model):
     #new_model = AtomicStructure(self.session)
     atom_to_index = []
     

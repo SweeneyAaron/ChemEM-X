@@ -12,6 +12,7 @@ import os
 import subprocess
 import json
 import numpy as np
+import copy 
 from json.decoder import JSONDecodeError
 from urllib.parse import parse_qs
 from rdkit import Chem
@@ -29,8 +30,9 @@ from openmm import app
 
 from chimerax.ChemEM.chemem_job import  JobHandler, SimulationJob,LocalChemEMJob, SIMULATION_JOB, CHEMEM_JOB, EXPORT_SIMULATION, EXPORT_LIGAND_SIMULATION, EXPORT_COVELENT_LIGAND_SIMULATION
 from chimerax.ChemEM.map_masks import  SignificantFeaturesProtocol
-from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap, RW_mol_from_smiles,  draw_molecule_with_atom_indices, RD_PROTEIN_SMILES, save_image_temporarily, remove_temporary_file, combine_molecules_and_react
-from chimerax.ChemEM.simulation import Simulation, get_complex_structure, get_complex_system,  MapBias, TugForce, HbondDistForce, HbondAngleForce, PiPiDistForce, get_position_vector_from_atom, get_model_from_complex_structure
+from chimerax.ChemEM.rdtools import Protonate, smiles_is_valid, ChemEMResult, SolutionMap, RW_mol_from_smiles,  draw_molecule_with_atom_indices, RD_PROTEIN_SMILES, save_image_temporarily, remove_temporary_file, combine_molecules_and_react, get_mol_from_output, RD_PROTEIN_HYDROGENS, hydrogen_mapping,  translate_and_rotate_molecule  
+from chimerax.ChemEM.simulation import Simulation, get_complex_structure, get_complex_system,  MapBias, TugForce, HbondDistForce, HbondAngleForce, PiPiDistForce, get_position_vector_from_atom, get_model_from_complex_structure, SSE_force, SSERigidBodyBBConstraint, HelixHbondForce, PsiAngleForce, PhiAnglelForce, AnchorAtoms, get_mmpbsa_complex_system
+from chimerax.ChemEM.covelent_binding import map_atoms, remove_atoms, get_bonded_atoms
 from chimerax.ChemEM.mouse_modes import  DragCoordinatesMode, PickPoint
 from chimerax.ChemEM.config import Config
 from chimerax.mouse_modes import MouseMode
@@ -53,7 +55,7 @@ from openmm import unit
 from openmm import MonteCarloBarostat, XmlSerializer, app, unit, CustomCompoundBondForce, Continuous3DFunction, vec3, Vec3
 from scipy.ndimage import gaussian_filter
 from openmm.unit.quantity import Quantity
-
+import parmed
 
 PLACE_LIGAND = 'place_ligand'
 
@@ -98,7 +100,7 @@ class CHEMEM(HtmlToolInstance):
         self.current_restraints = {}
         
         self.covelent_ligand = None
-        
+        self.mmgbsa = Parameters()
         #remove!!
         self.avalible_binding_sites = 0
         
@@ -146,7 +148,9 @@ class CHEMEM(HtmlToolInstance):
             else:
                 #For now assumes protein only.
                 chimerax_model = self.current_simulation.parameters['current_model']
-                
+            
+            selected_atoms = self.current_simulation.get_parameter('selected_atoms')
+            
            # simulation = Simulation(self.session, job.params.output, current_map, platform_name = self.platform)
             
             
@@ -166,13 +170,35 @@ class CHEMEM(HtmlToolInstance):
             
             
             simulation.set_ring_groups(simulation_model, self.atoms_to_position_index_as_dic)
+            simulation.set_SSE_elements(simulation_model, self.atoms_to_position_index_as_dic)
+            if selected_atoms:
+                simulation.set_anchor_residues(simulation_model, 
+                                               self.current_simulation.parameters['selected_atom_data'],
+                                               self.atoms_to_position_index_as_dic)
+            
+            
+            
+            
             simulation.set_force_groups()
             if current_map is not None:
                 simulation.add_force(MapBias)
+            
+            
+            if selected_atoms:
+                simulation.add_force(AnchorAtoms)
+                
+            #simulation.add_force(SSE_force)
+            
+            #simulation.add_force(HelixHbondForce)
+            #simulation.add_force(PsiAngleForce)
+            #simulation.add_force(PhiAnglelForce)
+            
+            #simulation.add_constraint(SSERigidBodyBBConstraint)
             simulation.add_force(TugForce)
             simulation.add_force(HbondDistForce)
             simulation.add_force(HbondAngleForce)
             simulation.add_force(PiPiDistForce)
+            
             simulation.set_simulation()
 
             #self.session.models.add([simulation_model])
@@ -190,11 +216,13 @@ class CHEMEM(HtmlToolInstance):
                 current_map = self.current_simulation.parameters['current_map']
             else:
                 current_map = None
+            
+            
 
             complex_ligand_structure = get_complex_structure(job.params.output)
             
             #Add residues?? 
-            self.simulation_model, ligand_residue = add_openff_ligand_to_chimerax_model(complex_ligand_structure, self.simulation_model)
+            self.simulation_model, ligand_residue, atoms_to_position_index_as_dic = add_openff_ligand_to_chimerax_model(complex_ligand_structure, self.simulation_model)
             
             #get protein com 
             all_atom_coords = []
@@ -252,9 +280,15 @@ class CHEMEM(HtmlToolInstance):
             self.simulation = simulation
             #-----
             simulation.set_ring_groups(simulation_model, self.atoms_to_position_index_as_dic)
+            simulation.set_SSE_elements(simulation_model, self.atoms_to_position_index_as_dic)
             simulation.set_force_groups()
             if current_map is not None:
                 simulation.add_force(MapBias)
+            #simulation.add_force(SSE_force)
+            #simulation.add_constraint(SSERigidBodyBBConstraint)
+            #simulation.add_force(HelixHbondForce)
+            #simulation.add_force(PsiAngleForce)
+            #simulation.add_force(PhiAnglelForce)
             simulation.add_force(TugForce)
             simulation.add_force(HbondDistForce)
             simulation.add_force(HbondAngleForce)
@@ -274,27 +308,329 @@ class CHEMEM(HtmlToolInstance):
             
             print('ENDED...')
             
-        elif job.jobtype == EXPORT_COVELENT_LIGAND_SIMULATION:
-            
+        elif job.job_type == EXPORT_COVELENT_LIGAND_SIMULATION:
+
+            print('@covenlent_ligand_structure')
             
             if 'current_map' in self.current_simulation.parameters:
                 current_map = self.current_simulation.parameters['current_map']
             else:
                 current_map = None
-
+            
+            selected_atoms = self.current_simulation.get_parameter('selected_atoms')
+            
+            # Retrieve molecules and structures
+            map_mol = get_mol_from_output(job.params.output)
+            input_mol = self.covelent_ligand.parameters['combined_rwmol']
             complex_ligand_structure = get_complex_structure(job.params.output)
             
-            #DEBUG---
-            self.covenlent_ligand_structure = complex_ligand_structure
-            #---
+            # Get removed protein atoms and residue indices
+            removed_protein_atoms = self.covelent_ligand.get_parameter('protein_remove_atom_idx')
+            protein_atom_names_to_idx = self.covelent_ligand.get_parameter('residue_idx')
+            
+            if removed_protein_atoms is not None:
+                
+                # TODO: Needs to be updated if ligand atoms have been removed
+                #need to remove protein atoms from simulation, chimerax model, 
+                #protein_atom_names_to_idx 
+                
+                
+                pass
+            
+            # Adjust protein atom indices
+            num_ligand_atoms = self.covelent_ligand.parameters['ligand_rw_mol'].GetNumHeavyAtoms()
+            protein_atom_names_to_idx = {name: idx + num_ligand_atoms for name, idx in protein_atom_names_to_idx.items()}
+            
+            # Get current simulation complex system
+            current_simulation_complex_system = self.simulation.complex_structure
+            bind_protein_atom = self.covelent_ligand.get_parameter('protein_atom')
+            bind_protein_atom_idx = self.atoms_to_position_index_as_dic[bind_protein_atom]
+            current_simulation_atom = current_simulation_complex_system.atoms[bind_protein_atom_idx]
+            
+            # Map atoms between molecules
+            atom_match = map_mol.GetSubstructMatch(input_mol)
+            protein_atoms_conversion = {name: atom_match[idx] for name, idx in protein_atom_names_to_idx.items()}
+            
+            
+            
+            current_simulation_bonded_atoms, current_simulation_bonded_atoms_hydrogen = get_bonded_atoms(
+                current_simulation_atom, protein_atoms_conversion
+            )
+            
+            # Get bonded atoms in complex ligand structure
+            cov_struct_idx = protein_atoms_conversion[bind_protein_atom.name]
+            ligand_atom = complex_ligand_structure.atoms[cov_struct_idx]
+            protein_keys = set(protein_atoms_conversion.values())
+            current_ligand_bonded_atoms = [
+                bond.atom1 if bond.atom1 != ligand_atom else bond.atom2
+                for bond in ligand_atom.bonds
+                if (bond.atom1.idx if bond.atom1 != ligand_atom else bond.atom2.idx) not in protein_keys
+            ]
+            
+            # Deep copy structures
+            complex_structure_copy = copy.deepcopy(current_simulation_complex_system)
+            complex_structure_copy._ncopies = current_simulation_complex_system._ncopies
+            
+            # Update hydrogen atoms in copy
+            current_simulation_bonded_atoms_hydrogen = [
+                complex_structure_copy.atoms[atom.idx] for atom in current_simulation_bonded_atoms_hydrogen
+            ]
+            
+           
+            # Remove hydrogens from complex structure copy
+            remove_atoms(complex_structure_copy, current_simulation_bonded_atoms_hydrogen)
+            
+            # Deep copy ligand structure
+            complex_ligand_structure_copy = copy.deepcopy(complex_ligand_structure)
+            complex_ligand_structure_copy._ncopies = complex_ligand_structure._ncopies
+            
+            # Identify protein atoms to remove from ligand structure
+            heavy_atom_idxs = list(protein_atoms_conversion.values())
+            hydrogen_idxs = []
+            for idx in heavy_atom_idxs:
+                atom = complex_ligand_structure_copy.atoms[idx]
+                for bond in atom.bonds:
+                    other_atom = bond.atom1 if bond.atom1 != atom else bond.atom2
+                    if other_atom.element_name == 'H':
+                        hydrogen_idxs.append(other_atom.idx)
+            
+            prot_atoms_to_remove = sorted(heavy_atom_idxs + hydrogen_idxs, reverse=True)
+            prot_atoms_to_remove_atoms = [complex_ligand_structure_copy.atoms[idx] for idx in prot_atoms_to_remove]
+            
+            # Remove protein atoms from ligand structure copy
+            remove_atoms(complex_ligand_structure_copy, prot_atoms_to_remove_atoms)
+            
+            # Remake parameters
+            complex_structure_copy.remake_parm()
+            complex_ligand_structure_copy.remake_parm()
+            
+            # Combine structures
+            new_complex_structure = complex_structure_copy + complex_ligand_structure_copy
+            
+            
+            # Create index-to-atom mapping
+            index_to_atom_dic = {idx: name for name, idx in protein_atoms_conversion.items()}
+            hydrogen_map, hydrogen_map_to_atom_name = hydrogen_mapping(
+                Chem.AddHs(map_mol), protein_atoms_conversion, bind_protein_atom.residue.name
+            )
+            hydrogen_map_idx = {idx: name for name, idx in hydrogen_map.items()}
+            
+            # Get binding atoms
+            prot_atom = new_complex_structure.atoms[bind_protein_atom_idx]
+            old_prot_atom = complex_ligand_structure.atoms[protein_atoms_conversion[bind_protein_atom.name]]
+            
+            old_ligand_atom_idx = self.covelent_ligand.parameters['ligand_atom_bound_index'].value
+            old_ligand_atom = complex_ligand_structure.atoms[atom_match[old_ligand_atom_idx]]
+            ligand_atom = next(
+                atom for atom in new_complex_structure.residues[-1].atoms if atom.name == old_ligand_atom.name
+            )
+
+            # Add bonds between protein and ligand
+            for bond in complex_ligand_structure.bonds:
+                if old_prot_atom in bond and old_ligand_atom in bond:
+                    new_bond = parmed.topologyobjects.Bond(prot_atom, ligand_atom, bond.type)
+                    new_complex_structure.bonds.append(new_bond)
+            
+            # Function to map atoms in an angle or dihedral
+
+            # Add angles between protein and ligand
+            for angle in complex_ligand_structure.angles:
+                if old_prot_atom in angle and old_ligand_atom in angle:
+                    mapped_atoms = map_atoms(
+                        angle,
+                        {'prot_atom': old_prot_atom, 'ligand_atom': old_ligand_atom},
+                        {'prot_atom': prot_atom, 'ligand_atom': ligand_atom},
+                        index_to_atom_dic,
+                        hydrogen_map_idx,
+                        new_complex_structure
+                    )
+                    new_angle = parmed.topologyobjects.Angle(*mapped_atoms, type=angle.type)
+                    new_complex_structure.angles.append(new_angle)
+            
+            # Add dihedrals between protein and ligand
+            for dihedral in complex_ligand_structure.dihedrals:
+                if old_prot_atom in dihedral and old_ligand_atom in dihedral:
+                    mapped_atoms = map_atoms(
+                        dihedral,
+                        {'prot_atom': old_prot_atom, 'ligand_atom': old_ligand_atom},
+                        {'prot_atom': prot_atom, 'ligand_atom': ligand_atom},
+                        index_to_atom_dic,
+                        hydrogen_map_idx,
+                        new_complex_structure
+                    )
+                   
+                    new_dihedral = parmed.topologyobjects.Dihedral(*mapped_atoms, type=dihedral.type)
+                    new_complex_structure.dihedrals.append(new_dihedral)
+            
+            # Remake parameters
+            new_complex_structure.remake_parm()
+            
+            # Adjust coordinates
+            coords = complex_ligand_structure.coordinates
+            index_1 = old_prot_atom.idx
+            target_1_name = index_to_atom_dic[index_1]
+            target_1 = next(
+                (np.array([atom.xx, atom.xy, atom.xz]) for atom in prot_atom.residue.atoms if atom.name == target_1_name),
+                None
+            )
+            
+            # Find second target atom
+            atom_target_2 = next(
+                (bond.atom1 if bond.atom1 != old_prot_atom and bond.atom1.element_name != 'H' and bond.atom1 != old_ligand_atom else bond.atom2)
+                for bond in old_prot_atom.bonds
+                if (bond.atom1 != old_prot_atom and bond.atom1.element_name != 'H' and bond.atom1 != old_ligand_atom) or
+                   (bond.atom2 != old_prot_atom and bond.atom2.element_name != 'H' and bond.atom2 != old_ligand_atom)
+            )
+            index_2 = atom_target_2.idx
+            target_2_name = index_to_atom_dic[index_2]
+            target_2 = next(
+                (np.array([atom.xx, atom.xy, atom.xz]) for atom in prot_atom.residue.atoms if atom.name == target_2_name),
+                None
+            )
+            
+            self.target_info = [target_1_name, index_1, target_1, target_2_name, index_2, target_2]
+            
+            new_coords = translate_and_rotate_molecule(coords, index_1, target_1, index_2, target_2)
+            
+            # Map new coordinates to complex structure
+            new_ligand_residue_map = {
+                i.idx: j.idx
+                for i in old_ligand_atom.residue.atoms
+                for j in ligand_atom.residue.atoms
+                if i.name == j.name
+            }
+            
+            coordinates = new_complex_structure.coordinates.copy()
+            for old_idx, new_idx in new_ligand_residue_map.items():
+                coordinates[new_idx] = new_coords[old_idx]
+            
+            new_complex_structure.coordinates = coordinates
+            
+            # Build simulation model
+            a2p = []
+            for atom, old_idx in self.atoms_to_position_index:
+                old_atom_residue = self.simulation.complex_structure.atoms[old_idx].residue
+                new_residue = new_complex_structure.residues[old_atom_residue.idx]
+                
+                for new_atom in new_residue.atoms:
+                    if new_atom.name == atom.name:
+                        a2p.append((atom, new_atom.idx))
+            
+            
+                
+            
+            
+            simulation_model, ligand_residue, self.atoms_to_position_index_as_dic = add_openff_covelent_ligand_to_chimerax_model(
+                new_complex_structure,
+                self.simulation_model,
+                atoms_to_position_index_as_dic={i[0]: i[1] for i in a2p}
+            )
+            
+            self.atoms_to_position_index = list(self.atoms_to_position_index_as_dic.items())
+            
+            # Get complex system
+            complex_system = get_complex_system(new_complex_structure, self.current_simulation)
+
+            # Clean up old simulation
+            del self.simulation  # Free up memory
+            
+            # Set up new simulation
+            simulation = Simulation(
+                self.session,
+                complex_system,
+                new_complex_structure,
+                current_map,
+                platform_name=self.platform
+            )
+            
+            self.simulation = simulation
+            
+            # Set up simulation forces
+            simulation.set_ring_groups(simulation_model, self.atoms_to_position_index_as_dic)
+            simulation.set_SSE_elements(simulation_model, self.atoms_to_position_index_as_dic)
+            simulation.set_force_groups()
+            if current_map is not None:
+                simulation.add_force(MapBias)
+            
+            
+            print('selected_atoms')
+            print(selected_atoms)
+            if selected_atoms:
+                
+                
+                simulation.set_anchor_residues(simulation_model, 
+                                               self.current_simulation.parameters['selected_atom_data'],
+                                               self.atoms_to_position_index_as_dic)
+                
+                simulation.add_force(AnchorAtoms)
+            #simulation.add_force(HelixHbondForce)
+            #simulation.add_force(PsiAngleForce)
+            #simulation.add_force(PhiAnglelForce)
+            simulation.add_force(TugForce)
+            simulation.add_force(HbondDistForce)
+            simulation.add_force(HbondAngleForce)
+            simulation.add_force(PiPiDistForce)
+            simulation.set_simulation()
+            
+            self.simulation_model = simulation_model
+            self.current_simualtion_id = None
+            
+            # Execute JavaScript code
+            js_code = 'openTab(event, "RunSimulationTab");'
+            self.run_js_code(js_code)
+            
+            #TODO!! Add back in
             self.remove_temp_directories()
+
+            
+            
+            print('ENDED')
+            
+            
+            #Adding bonds...
+            #Adding angles...
+            #Adding dihedrals...
+            #Adding Ryckaert-Bellemans torsions...
+            #Adding Urey-Bradleys...
+            #Adding improper torsions...
+            #Adding CMAP torsions...
+            #Adding trigonal angle terms...
+            #Adding out-of-plane bends...
+            #Adding pi-torsions...
+            #Adding stretch-bends...
+            #Adding torsion-torsions...
+            #Adding Nonbonded force...
+            
+            
+            #angles! 
+            #dihedrals!
+            #impropers!
+            #remake!
+            #chimera_x_residue!
+            #delete older simulations¡
+            #simulate!
+            
+            
+            #identify the ligand atoms and any atoms on the protein that have been changed.
+            #identify the protein atoms in simulation and if any of them have been changed/deleted in the new structure 
+            
+            #remove any protein atoms that need to be removed.
+            #add in the new atoms to protein.
+            #add in new residue to protein. 
+            #transfer the bond, angel,dihedral stuff
+            #add
+            
+            
+            
+        
+            
             
                 
             
            
             
     def remove_temp_directories(self):
-        
+            
             if self.temp_build_dir is not None:
                 try:
                     
@@ -353,6 +689,10 @@ class CHEMEM(HtmlToolInstance):
             job.start()
             self.job_handeler.add_job(job) 
         
+        elif job_type == EXPORT_COVELENT_LIGAND_SIMULATION:
+            job.start()
+            self.job_handeler.add_job(job) 
+            
 
     
     def build_simulation(self):
@@ -409,6 +749,7 @@ class CHEMEM(HtmlToolInstance):
         None.
 
         '''
+        
         if 'output' in parameter_object.parameters:
             model_path = os.path.join(parameter_object.parameters['output'].value, 'Inputs')
         else:
@@ -1419,7 +1760,7 @@ class SetSimulationMap(Command):
             model = [i for i in chemem.session.models if i.id == query.value][0]
             cls.update_chemem(chemem, model)
         else:
-            js_code = f"alert('ChemEM can't assign simulation map with id: {query.name});"
+            js_code = f"alert('ChemEM can\\'t assign simulation map with id: {query.name}');"
             chemem.run_js_code(js_code)
     
     @classmethod 
@@ -1431,11 +1772,20 @@ class SetSimulationMap(Command):
 class SetSimulationModel(Command):
     @classmethod 
     def run(cls, chemem, query):
+        
+        
         if chemem.session.models.have_id(query.value):
+            
             model = [i for i in chemem.session.models if i.id == query.value][0]
             cls.update_chemem(chemem, model)
+        elif query.value == 'SelectedAtoms':
+            model = cls.get_selected_model(chemem)
+            if model is not None:
+                chemem.current_simulation.parameters['selected_atoms'] = True
+                cls.update_chemem(chemem, model)
         else:
-            js_code = f"alert('ChemEM can't assign simulation map with id: {query.name});"
+            
+            js_code = f"alert('ChemEM can\\'t assign simulation map with id: {query.name}');"
             chemem.run_js_code(js_code)
     
     @classmethod 
@@ -1443,7 +1793,19 @@ class SetSimulationModel(Command):
         """Update ChemEM object state data."""
         
         chemem.current_simulation.parameters['current_model'] = model 
-        
+    
+    @classmethod 
+    def get_selected_model(cls, chemem):
+        selected_models = []
+        for model in chemem.session.models:
+            if model.selected:
+                selected_models.append(model)
+        if len(selected_models) > 1:
+            chemem.run_js_code("alert('Please only select atoms from a single model');")
+            return False
+        else: 
+            return selected_models[0]
+            
 
 class SetCurrentMap(Command):
     #TODO! add cache functions!!!
@@ -1933,8 +2295,27 @@ class BuildSimulation(Command):
                     #Need to do something with the ligands!!!
                     #ADD A CHECK FOR IF THE LIGAND FILES ARE IN THE PDB
                 
+                
+                
                 #Here is where you have a selected region id
                 
+                #Selected atoms!!, essentailly, ligands are always included but need to find +1 and -1 residues to pin.
+                if chemem.current_simulation.get_parameter('selected_atoms') is not None:
+                    selected_residues_info = analyze_selected_atoms(chemem.current_simulation.parameters['current_model'])
+                    chemem.current_simulation.parameters['selected_atom_data'] = selected_residues_info
+                    non_selected_residues = selected_residues_info['res_atoms_not_selected']
+                    anchor_residues =  selected_residues_info['extra_residues']
+                    
+                    
+                    for atom_array in non_selected_residues.values():
+                        for atom in atom_array:
+                            atom.selected = True 
+                    
+                    for residue in anchor_residues:
+                        for atom in residue.atoms:
+                            atom.selected = True
+                    
+                    
                 #TODO!
                 chemem.temp_build_dir = tempfile.mkdtemp()
                 #chemem.temp_build_dir = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/debug/test_simulate/'
@@ -2229,7 +2610,7 @@ class BindCovelentLigandToAtom(Command):
                 else :
                     chemem.run_js_code('alert("Please select a single protein atom for ligand binding");')
                     
-                
+
 class AddCovelentListParameter(Command):
     @classmethod 
     def run(cls,chemem,query):
@@ -2292,10 +2673,14 @@ class BuildCovelentSimulation(Command):
                 else:
                     protein_bonds_to_change = [i.as_tuple() for i in protein_bonds_to_change]
                 
+                #TODO! new
+                ligand =  chemem.covelent_ligand.get_parameter("covelent_ligand").value
                 
+                residue_name = chemem.covelent_ligand.parameters['protein_atom'].residue.name
+
                 
-                product_smiles, combined_rwmol = combine_molecules_and_react(ligand,
-                                            residue,
+                product_smiles, combined_rwmol,ligand_atom_idx, residue_atom_idx = combine_molecules_and_react(ligand,
+                                            residue_name,
                                             ligand_atom_idx.value,
                                             residue_atom_idx,
                                             bond_type.value,
@@ -2304,8 +2689,10 @@ class BuildCovelentSimulation(Command):
                                             protein_atoms_to_remove,
                                             ligand_atoms_to_remove
                                             )
+                
                 chemem.covelent_ligand.add(SmilesParameter('product_smiles', product_smiles))
                 chemem.covelent_ligand.parameters['combined_rwmol'] = combined_rwmol
+                
                 
                 chemem_executable = chemem.parameters.get_parameter('chememBackendPath')
                 
@@ -2313,12 +2700,14 @@ class BuildCovelentSimulation(Command):
                 if chemem_executable is not None:
                     executable = f"{chemem_executable.value}.export_ligand_simulation"
                     chemem.run_js_code('stopSimulation();')
+                       
+                    #chemem.temp_build_dir = '/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/test_covelent_ligand_2/'
                     chemem.temp_build_dir = tempfile.mkdtemp()
                     #solvent???TODO!!
                     params = Parameters()
                     params.add_list_parameter('Ligands', chemem.covelent_ligand.parameters['product_smiles'])
                     params.add(PathParameter('output', chemem.temp_build_dir))
-                    params.add(IntParameter('protonate', 0))
+                    params.add(IntParameter('protonation', 0))
                     
                     print(params.parameters)
                     
@@ -2326,8 +2715,54 @@ class BuildCovelentSimulation(Command):
                     
                     chemem.run(executable, EXPORT_COVELENT_LIGAND_SIMULATION)
                 #now run chemem get parameters!!
-                
-               
+
+class AddMMGBSAParameter(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        #if chemem.current_simualtion_id is not None:
+        chemem.mmgbsa.add(query)
+
+
+class RunMMGBSAEquilibrium(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        #TODO! check if there is still an equlibrium!
+        if chemem.simulation is not None:
+            solvent_model =  chemem.mmgbsa.get_parameter('implicitSolventModel')
+            complex_structure = chemem.simulation.complex_structure
+            complex_system = get_mmpbsa_complex_system(complex_structure, solvent_model)
+            
+            simulation = Simulation(chemem.session, 
+                                    complex_system, 
+                                    complex_structure,
+                                    None,
+                                    platform_name = chemem.platform)
+            
+            simulation.set_SSE_elements(chemem.simulation_model, 
+                                        chemem.atoms_to_position_index_as_dic)
+            simulation.set_force_groups()
+            if chemem.mmgbsa.get_parameter('equilibriumRestraints').value == 'SSEs':
+                #helix forces 
+                #TODO! reduce K
+                simulation.add_force(HelixHbondForce)
+                simulation.add_force(PsiAngleForce)
+                simulation.add_force(PhiAnglelForce)
+            
+            
+            simulation.set_simulation()
+            chemem.mmgbsa_simulation = simulation
+            
+        #check if the same simulaton has been eq. if not
+            #build the simulation 
+        #run for eqilibrium 
+        #return reporters 
+        #mark as eqilirised
+
+class RunMMGBSA(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        pass
+        #build and equlibritate system:
 #╔═════════════════════════════════════════════════════════════════════════════╗
 #║                             Class Helpers                                   ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
@@ -2433,6 +2868,164 @@ class RenderBindingSite:
 #║                             Helper functions                                ║
 #╚═════════════════════════════════════════════════════════════════════════════╝
 
+def analyze_selected_atoms(model):
+    from chimerax.atomic import Atoms, Residues
+
+    # Get all selected atoms in the model
+    sel_atoms = model.atoms.filter(model.atoms.selected)
+
+    # Get the unique residues that the selected atoms belong to
+    sel_residues = sel_atoms.unique_residues
+
+    # Find atoms in each residue that are not selected
+    res_atoms_not_selected = {}
+    for res in sel_residues:
+        atoms_in_res = res.atoms
+        not_selected_atoms = atoms_in_res.subtract(sel_atoms)
+        res_atoms_not_selected[res] = not_selected_atoms
+
+    # Sort residues by chain ID and residue number for sequential analysis
+    sel_residues_sorted = sorted(sel_residues, key=lambda r: (r.chain_id, r.number))
+
+    # Identify continuous segments
+    segments = []
+    segment_start = sel_residues_sorted[0]
+    previous_res = segment_start
+
+    for res in sel_residues_sorted[1:]:
+        current_res = res
+
+        # Check if residues are sequential and bonded
+        sequential = (previous_res.chain_id == current_res.chain_id and
+                      previous_res.number + 1 == current_res.number)
+
+        bonded = False
+        if sequential:
+            c_atom = previous_res.find_atom('C')
+            n_atom = current_res.find_atom('N')
+            if c_atom and n_atom:
+                bonded = any(bond.other_atom(c_atom) == n_atom for bond in c_atom.bonds)
+
+        if not sequential or not bonded:
+            # End the current segment
+            segment_end = previous_res
+            segments.append((segment_start, segment_end))
+            # Start a new segment
+            segment_start = current_res
+
+        previous_res = current_res
+
+    # Add the last segment
+    segment_end = previous_res
+    segments.append((segment_start, segment_end))
+
+    # Collect discontinuities and extra residues
+    discontinuities = []
+    extra_residues = set()
+
+    for i, segment in enumerate(segments):
+        segment_start, segment_end = segment
+
+        # Find residues before and after the segment
+        # Previous residue to segment_start
+        prev_res_num = segment_start.number - 1
+        prev_res = get_residue(model, segment_start.chain_id, prev_res_num)
+        if prev_res:
+            c_atom = prev_res.find_atom('C')
+            n_atom = segment_start.find_atom('N')
+            if c_atom and n_atom and any(bond.other_atom(c_atom) == n_atom for bond in c_atom.bonds):
+                extra_residues.add(prev_res)
+
+        # Next residue to segment_end
+        next_res_num = segment_end.number + 1
+        next_res = get_residue(model, segment_end.chain_id, next_res_num)
+        if next_res:
+            c_atom = segment_end.find_atom('C')
+            n_atom = next_res.find_atom('N')
+            if c_atom and n_atom and any(bond.other_atom(c_atom) == n_atom for bond in c_atom.bonds):
+                extra_residues.add(next_res)
+
+        # Add discontinuity between this segment and the next
+        if i < len(segments) - 1:
+            next_segment_start = segments[i + 1][0]
+            discontinuities.append((segment_end, next_segment_start))
+
+    return {
+        'selected_atoms': sel_atoms,
+        'selected_residues': sel_residues,
+        'res_atoms_not_selected': res_atoms_not_selected,
+        'discontinuities': discontinuities,
+        'extra_residues': extra_residues
+    }
+
+def get_residue(model, chain_id, res_num):
+    from chimerax.atomic import Residues
+
+    residues = model.residues.filter(
+        (model.residues.chain_ids == chain_id) & (model.residues.numbers == res_num)
+    )
+    return residues[0] if len(residues) > 0 else None
+
+
+
+def add_openff_covelent_ligand_to_chimerax_model(openff_structure, model, name = 'LIG', atoms_to_position_index_as_dic = None):
+    
+    
+    openff_resiude = openff_structure.residues[-1]
+    chain_id = [i.chain_id for i in model.residues][-1]
+    
+    if atoms_to_position_index_as_dic is None:
+        _, atoms_to_position_index = get_model_from_complex_structure(openff_structure, model)
+        
+        atoms_to_position_index_as_dic = {i[0]: i[1] for i in atoms_to_position_index}
+    
+    print('HERERERER')
+    print(len(atoms_to_position_index_as_dic))
+    
+    next_residue = max([i.number for i in model.residues if i.chain_id == chain_id]) + 1
+    new_residue = model.new_residue(name, chain_id, next_residue)
+    print("New Residue:", name, chain_id, next_residue)
+    atoms = []
+    for atom in openff_resiude.atoms:
+        new_atom = model.new_atom(atom.name, atom.element )
+        atoms.append(new_atom)
+        new_residue.add_atom(new_atom)
+        new_atom.coord = np.array([atom.xx, atom.xy, atom.xz])
+        atoms_to_position_index_as_dic[new_atom] = atom.idx
+    
+    #return model, new_residue
+    bonds_added = []
+    for atom in openff_resiude.atoms:
+        for bond in atom.bonds:
+            atom1 = bond.atom1.idx 
+            atom2 = bond.atom2.idx 
+            new_bond = sorted([atom1, atom2])
+            if new_bond not in bonds_added:
+                bonds_added.append(new_bond)
+    
+    print('11111111')
+    print(len(atoms_to_position_index_as_dic))
+    
+    reverse_idx_to_atoms = {i:j for j,i in  atoms_to_position_index_as_dic.items()}
+    print(len(reverse_idx_to_atoms))
+    
+    print('')
+    print(atoms_to_position_index_as_dic)
+    print('')
+    print(reverse_idx_to_atoms)
+    print('')
+    print(bonds_added)
+    for idx1, idx2 in bonds_added:
+        a1 = reverse_idx_to_atoms[idx1]
+        a2 = reverse_idx_to_atoms[idx2]
+        bnd = model.new_bond(a1, a2)
+    
+    
+    
+    return model, new_residue, atoms_to_position_index_as_dic
+        
+    #add bonds 
+
 def add_openff_ligand_to_chimerax_model(complex_structure, model, name = 'LIG'):
     
     chain_id = [i.chain_id for i in model.residues][-1]
@@ -2441,14 +3034,17 @@ def add_openff_ligand_to_chimerax_model(complex_structure, model, name = 'LIG'):
     print("New Residue:", name, chain_id, next_residue)
     atoms = []
     #add atoms to residues
+    
     for atom in complex_structure.atoms:
         new_atom = model.new_atom(atom.name,atom.element )
         atoms.append(new_atom)
         new_residue.add_atom(new_atom)
         new_atom.coord = np.array([atom.xx, atom.xy, atom.xz])
+        
     #add bonds 
     
     bonds_added = []
+    
     
     for atom in complex_structure.atoms:
         for bond in atom.bonds:
@@ -2458,7 +3054,10 @@ def add_openff_ligand_to_chimerax_model(complex_structure, model, name = 'LIG'):
             if new_bond not in bonds_added:
                 bonds_added.append(new_bond)
     
+    
+    
     for a1, a2 in bonds_added:
+        
         bnd = model.new_bond(atoms[a1], atoms[a2])
         
     

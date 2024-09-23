@@ -719,6 +719,8 @@ This module was developed by:
         }
         
         
+        
+        
     </style>
 </head>
 <body>
@@ -737,6 +739,7 @@ This module was developed by:
         <button class="tablinks" onclick="openTab(event, 'ResultsTab')">Results</button>
         <button class="tablinks" onclick="openTab(event, 'SimulationTab'); getAvalilblePlatforms();">Build</button>
         <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
+        <button class="tablinks" onclick="openTab(event, 'OptimisationTab')">Optimize</button>
         <!--<button class="tablinks" >Ligand Interactions</button> -->
     </div>
     
@@ -1268,7 +1271,8 @@ This module was developed by:
               
               <label for="simulationModels" style="font-weight: bold;">Protein Model:</label>
                   <select id="simulationModels" name="simulationModels" >
-                      <option value="N/A">N/A</option> <!-- Default None option -->
+                      <option value="N/A">N/A</option> 
+                      <option value="SelectedAtoms">Selected Atoms</option> <!-- Default None option -->
                   <!-- Options will be populated by populateDropdown function -->
                   </select>
               
@@ -1338,6 +1342,27 @@ This module was developed by:
      </div><!-- end of tab -->
      
 
+    
+    <div id="OptimisationTab" class="tabcontent">
+    
+        <div class="container" id="FreeEnergyContent">
+        <legend>Free Energy Calculation</legend>
+        
+        <select id="methodSelect" onchange="showFreeEnergyMethodParams()">
+            <option value="">Select a method</option>
+            <option value="option_mmgbsa">MM/GBSA</option>
+            <option value="method2">Method 2</option>
+            
+        </select>
+
+        <!-- Container for method-specific input parameters -->
+        <div id="freeEnergyMethodParamsContainer"></div>
+        </div>
+    
+        
+    </div><!-- end of tab -->
+    
+    
     <script>
     let ligandIdCounter = 0;
     let bindingSiteCounter = 0;
@@ -1413,10 +1438,16 @@ This module was developed by:
             selectElement.appendChild(defaultOption);
         }
         if (elementId === "simulationModels") {
+            
             const defaultOption = document.createElement('option');
             defaultOption.value = 'None';
             defaultOption.text = 'None';
+            
             selectElement.appendChild(defaultOption);
+            const selectedOption = document.createElement('option'); 
+            selectedOption.value = 'SelectedAtoms';
+            selectedOption.text = 'Selected Atoms';
+            selectElement.appendChild(selectedOption);
         }
         
         options.forEach(optionValue => {
@@ -2080,9 +2111,17 @@ This module was developed by:
     function onSimulationModelsPopulated() {
         const selectElement = document.getElementById('simulationModels');
         if (selectElement.value) {
-            sendParameterToBackend("chemem:SetSimulationModel", selectElement.value, selectElement.value, "ModelParameter");
+            let parameterType = (selectElement.value === 'None' || selectElement.value === 'SelectedAtoms') ? 'StringParameter' : 'ModelParameter';
+            sendParameterToBackend("chemem:SetSimulationModel", selectElement.value, selectElement.value, parameterType);
         }
     }
+    
+    //function onSimulationModelsPopulated() {
+    //    const selectElement = document.getElementById('simulationModels');
+    //    if (selectElement.value) {
+    //        sendParameterToBackend("chemem:SetSimulationModel", selectElement.value, selectElement.value, "ModelParameter");
+    //    }
+    //}
     
     function saveConfFile() {
         
@@ -2959,8 +2998,223 @@ This module was developed by:
         `;
         simulationContent.appendChild(runButtonDiv);
     }
+    
+    
+    function showFreeEnergyMethodParams() {
+        var method = document.getElementById("methodSelect").value;
+        var paramsContainer = document.getElementById("freeEnergyMethodParamsContainer");
+        // Clear previous content
+        paramsContainer.innerHTML = "";
 
-
+        if (method === "option_mmgbsa") {  paramsContainer.innerHTML = `
+                    <div class="form-group-flex">
+                        <label for="equilibriumRestraints">Equilibrium Restraints:</label>
+                        <select id="equilibriumRestraints" name="equilibriumRestraints">
+                            <option value="None">None</option>
+                            <option value="SSEs">SSEs</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group-flex">
+                        <label for="equilibriumSteps">Equilibrium Steps:</label>
+                        <input type="number" id="equilibriumSteps" name="equilibriumSteps">
+                    </div>
+                    
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="simulationSteps">Simulation Steps:</label>
+                            <input type="number" id="simulationSteps" name="simulationSteps">
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="snapshotPerStep">Snapshot per Steps:</label>
+                            <input type="number" id="snapshotPerStep" name="snapshotPerStep">
+                        </div>
+                    </div>
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="temperature">Temperature (K):</label>
+                            <input type="number" id="temperature" name="temperature" step="1.0" value="300.0">
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="implicitSolventModel">Implicit Solvent Model:</label>
+                            <select id="implicitSolventModel" name="implicitSolventModel">
+                                <option value="GBn2">GBn2 solvation model</option>
+                                <option value="GBn">GBn solvation model</option>
+                                <option value="OBC2">Onufriev-Bashford-Case GBSA (GBOBC-II)</option>
+                                <option value="OBC1">Onufriev-Bashford-Case GBSA (GBOBC-I)</option>
+                                <option value="HCT">Hawkins-Cramer-Truhlar</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group-flex">
+                        <label for="outputDir">Output Directory:</label>
+                        <input type="text" id="outputDir" name="outputDir">
+                    </div>
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="runOnClose">Run on Close:</label>
+                            <input type="checkbox" id="runOnClose" name="runOnClose" checked>
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="singleTrajectory">Single Trajectory:</label>
+                            <input type="checkbox" id="singleTrajectory" name="singleTrajectory" checked>
+                        </div>
+                    </div>
+                    <button id="runButton" onclick="runMMGBSAEquilibriumCalculation()">Equilibrate</button>
+                    <button id="runButton" onclick="runMMGBSAFreeEnergyCalculation()">Calculate Free Energy</button>
+                `;
+        }
+    }
+    
+    function runMMGBSAEquilibriumCalculation() {
+        var equilibriumRestraints = document.getElementById("equilibriumRestraints").value;
+        var equilibriumSteps = document.getElementById("equilibriumSteps").value;
+        var simulationSteps = document.getElementById("simulationSteps").value;
+        var snapshotPerStep = document.getElementById("snapshotPerStep").value;
+        var outputDir = document.getElementById("outputDir").value;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        var temperature = document.getElementById("temperature").value;
+        var implicitSolventModel = document.getElementById("implicitSolventModel").value;
+        var singleTrajectory = document.getElementById("singleTrajectory").checked;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        // Validate required fields
+        if (equilibriumRestraints === "") {
+            alert("Please select the Equilibrium Restraints option.");
+            return;
+        } else {
+            sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumRestraints", equilibriumRestraints, "StringParameter");
+        }
+        
+        if (equilibriumSteps === "" || isNaN(equilibriumSteps)) {
+            alert("Please enter a valid number for Equilibrium Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumSteps", equilibriumSteps, "IntParameter");
+        }
+        
+        
+        if (simulationSteps === "" || isNaN(simulationSteps)) {
+            alert("Please enter a valid number for Simulation Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "simulationSteps", simulationSteps, "IntParameter");
+        }
+        
+        if (snapshotPerStep === "" || isNaN(snapshotPerStep)) {
+            alert("Please enter a valid number for Snapshot per Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "snapshotPerStep", snapshotPerStep, "IntParameter");
+        }
+        
+        
+        if (outputDir === "") {
+            alert("Please specify the Output Directory.");
+            return;
+        }
+        
+        
+        if (temperature === "" || isNaN(temperature)) {
+            alert("Please enter a valid temperature.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "temperature", temperature, "FloatParameter");
+        }
+        
+        
+        if (implicitSolventModel === "") {
+            alert("Please select an Implicit Solvent Model.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "implicitSolventModel", implicitSolventModel, "ImplicitSolventParameter");
+        }
+        
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "singleTrajectory", singleTrajectory , "BooleanParameter");
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "runOnClose", runOnClose , "BooleanParameter");
+        sendSiteValueToBackend("chemem:RunMMGBSAEquilibrium", "None");
+        
+        
+    }
+    
+    
+    function runMMGBSAFreeEnergyCalculation() {
+            // Get values from input fields
+        var equilibriumRestraints = document.getElementById("equilibriumRestraints").value;
+        var equilibriumSteps = document.getElementById("equilibriumSteps").value;
+        var simulationSteps = document.getElementById("simulationSteps").value;
+        var snapshotPerStep = document.getElementById("snapshotPerStep").value;
+        var outputDir = document.getElementById("outputDir").value;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        var temperature = document.getElementById("temperature").value;
+        var implicitSolventModel = document.getElementById("implicitSolventModel").value;
+        var singleTrajectory = document.getElementById("singleTrajectory").checked;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        
+        
+        // Validate required fields
+        if (equilibriumRestraints === "") {
+            alert("Please select the Equilibrium Restraints option.");
+            return;
+        } else {
+            sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumRestraints", equilibriumRestraints, "StringParameter");
+        }
+        
+        if (equilibriumSteps === "" || isNaN(equilibriumSteps)) {
+            alert("Please enter a valid number for Equilibrium Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumSteps", equilibriumSteps, "IntParameter");
+        }
+        
+        
+        if (simulationSteps === "" || isNaN(simulationSteps)) {
+            alert("Please enter a valid number for Simulation Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "simulationSteps", simulationSteps, "IntParameter");
+        }
+        
+        if (snapshotPerStep === "" || isNaN(snapshotPerStep)) {
+            alert("Please enter a valid number for Snapshot per Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "snapshotPerStep", snapshotPerStep, "IntParameter");
+        }
+        
+        
+        if (outputDir === "") {
+            alert("Please specify the Output Directory.");
+            return;
+        }
+        
+        
+        if (temperature === "" || isNaN(temperature)) {
+            alert("Please enter a valid temperature.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "temperature", temperature, "FloatParameter");
+        }
+        
+        
+        if (implicitSolventModel === "") {
+            alert("Please select an Implicit Solvent Model.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "implicitSolventModel", implicitSolventModel, "ImplicitSolventParameter");
+        }
+        
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "singleTrajectory", singleTrajectory , "BooleanParameter");
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "runOnClose", runOnClose , "BooleanParameter");
+        
+        sendSiteValueToBackend("chemem:RunMMGBSA", "None");
+        
+    }
+    
+    
+    
    document.addEventListener('DOMContentLoaded', function() {
    
         
@@ -3006,9 +3260,14 @@ This module was developed by:
             sendParameterToBackend("chemem:SetSimulationMap", this.value, this.value, "MapParameter");
         });
         
+        //const selectElementSimulationModel = document.getElementById('simulationModels');
+        //selectElementSimulationModel.addEventListener('change', function() {
+        //    sendParameterToBackend("chemem:SetSimulationModel", this.value, this.value, "ModelParameter");
+        //});
         const selectElementSimulationModel = document.getElementById('simulationModels');
         selectElementSimulationModel.addEventListener('change', function() {
-            sendParameterToBackend("chemem:SetSimulationModel", this.value, this.value, "ModelParameter");
+            let parameterType = (this.value === 'None' || this.value === 'SelectedAtoms') ? 'StringParameter' : 'ModelParameter';
+            sendParameterToBackend("chemem:SetSimulationModel", this.value, this.value, parameterType);
         });
         
         

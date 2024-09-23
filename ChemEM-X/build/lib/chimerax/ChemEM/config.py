@@ -28,7 +28,14 @@ class Config:
     
     def get_protein(self):
         if self.check_variable('current_model'):
+            
             model = self.parameters.parameters['current_model']
+            
+            selected_atoms = False
+            if self.check_variable('selected_atoms'):
+                selected_atoms = True
+                #set the model and a flag
+            
             model_file = f"{model.name}.pdb"
             
             rm_model = False
@@ -38,7 +45,14 @@ class Config:
                 
             model_id = f"#{'.'.join([str(i) for i in model.id])}"
             model_file = os.path.join(self.parameters.parameters['model_path'], model_file)
-            com = f'save {model_file} format pdb models {model_id}'
+            
+            if selected_atoms:
+                
+                
+                com = f'save {model_file} format pdb models {model_id} selectedOnly true'
+            else:
+                com = f'save {model_file} format pdb models {model_id}'
+                
             run(self.session, com)
             if rm_model:
                 self.session.models.remove([model])

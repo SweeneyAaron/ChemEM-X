@@ -11,6 +11,7 @@ src/__init__.py
 src/chemem_job.py
 src/chemem_marker.py
 src/config.py
+src/covelent_binding.py
 src/dihedral_color_monitor.py
 src/map_masks.py
 src/mouse_modes.py

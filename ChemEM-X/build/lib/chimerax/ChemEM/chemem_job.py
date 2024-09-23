@@ -19,6 +19,48 @@ EXPORT_SIMULATION = 'chemem.export_simulation'
 EXPORT_LIGAND_SIMULATION = 'chemem.export_ligand_simulation'
 SIMULATION_JOB = 'chemem-X simulation'
 EXPORT_COVELENT_LIGAND_SIMULATION = 'chemem.export_covelent_ligand_simulation'
+MMGBSA = 'chemem.mmgbsa' 
+
+class MMGBSAJob(Task):
+    def __init__(self, session, chemem, job_type = MMGBSA):
+        super().__init__(session)
+        self.chemem = chemem 
+        self.job_type = job_type
+        self.started = False
+        self.equlibrium = False 
+        self._set_temp = None
+        self.reporters = {}
+    
+    def terminate(self):
+        """Terminate this task.
+
+        This method should be overridden to clean up
+        task data structures.  This base method should be
+        called as the last step of task deletion.
+
+        """
+        self.session.tasks.remove(self)
+        self.end_time = datetime.datetime.now()
+        
+        if self._terminate is not None:
+            self._terminate.set()
+            
+        self.state = TaskState.TERMINATING
+    
+    def run(self,*args, **kw):
+        #first run the equilibirum step!!
+        if not self.equlibrium:
+            pass
+            
+    
+    def on_finish(self):
+        """Callback method executed after task thread terminates.
+
+        This callback is executed in the UI thread after the
+        :py:meth:`run` method returns.  By default, it does nothing.
+
+        """
+        self.terminate()
 
 class SimulationJob(Task):
     def __init__(self, session, chemem, job_type = SIMULATION_JOB):
@@ -176,27 +218,11 @@ class SimulationJob(Task):
                 
                 self.simulated_anneling = None
                 
-                
-                    
-                    
-                    
-                    
-                    
-                        
-                    
-                    
-                    
-            
+
             #if self.step_count == 250:
             #    print('HBOND TUG TEST TIME')
             #    self.chemem.simulation.update_hbond_tug_force_for_atom(self.hbond_tug)
-                
-            
-                
-            
-            
-    
-    
+
     
     def on_finish(self):
         """Callback method executed after task thread terminates.

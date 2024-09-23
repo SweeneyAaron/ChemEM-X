@@ -10,12 +10,15 @@ from dimorphite_dl import DimorphiteDL
 from rdkit import Chem
 from rdkit.Chem import Draw, rdchem, AllChem
 from rdkit.Geometry import Point3D
-
+from scipy.spatial.transform import Rotation as R
 import tempfile
 import os
 import numpy as np
 from chimerax.core.commands import run 
 import uuid
+from rdkit import Chem
+from rdkit.Chem import rdFMCS
+
 
 
 RD_PROTEIN_SMILES = {'CYS': ('N[C@H](C=O)CS', {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 'CB': 4, 'SG': 5}),
@@ -135,6 +138,7 @@ RD_PROTEIN_SMILES = {'CYS': ('N[C@H](C=O)CS', {'N': 0, 'CA': 1, 'C': 2, 'O': 3, 
 
 
 
+
 def smiles_is_valid(smiles):
     mol = Chem.MolFromSmiles(smiles)
     if mol is not None:
@@ -146,6 +150,12 @@ def mol_from_sdf(sdf_file, conf_num = 0):
     mol = suppl[conf_num]
     mol = Chem.RemoveHs(mol, sanitize=False)
     return mol
+
+def get_mol_from_output(output):
+    file = [i for i in os.listdir(output) if i.endswith('.sdf')][0]
+    mol = mol_from_sdf(os.path.join(output, file))
+    return mol
+    
 
 
 def open_pdb_model(session, file):
@@ -526,53 +536,478 @@ def modify_bond_order(rwmol, bonds_to_modify):
         else:
             print(f"No bond found between atom {atom_idx1} and {atom_idx2}")
 
-def remove_atoms(rwmol, atom_indices):
-    # Sort atom indices in reverse order to avoid index shifting issues
-    for atom_idx in sorted(atom_indices, reverse=True):
-        rwmol.RemoveAtom(atom_idx)
 
-def remove_atoms(rwmol, atom_indices):
-    # Sort atom indices in reverse order to avoid index shifting issues
-    for atom_idx in sorted(atom_indices, reverse=True):
-        rwmol.RemoveAtom(atom_idx)
+
+
+
+
+#------WORKING RDKIT COVALENT LINKAGE----
+def bond_order_value(bond_type):
+    """
+    Converts RDKit bond types to numerical bond order values.
+    """
+    bond_order_dict = {
+        Chem.rdchem.BondType.SINGLE: 1,
+        Chem.rdchem.BondType.DOUBLE: 2,
+        Chem.rdchem.BondType.TRIPLE: 3,
+        Chem.rdchem.BondType.AROMATIC: 1.5
+    }
+    return bond_order_dict.get(bond_type, 0)
+
+
+def get_expected_valence(atom):
+    """
+    Calculates the expected valence of an atom based on its element and formal charge.
+    
+    Parameters:
+    atom (rdkit.Chem.rdchem.Atom): The atom to calculate valence for.
+    
+    Returns:
+    float: The expected valence.
+    """
+    periodic_table = Chem.GetPeriodicTable()
+    atomic_num = atom.GetAtomicNum()
+    formal_charge = atom.GetFormalCharge()
+    
+    # Get the default valence for the atom
+    expected_valence = periodic_table.GetDefaultValence(atomic_num)
+    
+    # Adjust for formal charge
+    
+    expected_valence += formal_charge
+    
+    
+    return expected_valence
+
+
+
+
+def adjust_hydrogens(atom, s = False):
+    """
+    Adjusts explicit and implicit hydrogens on an atom to satisfy its valence and formal charge.
+    
+    Parameters:
+    atom (rdkit.Chem.rdchem.Atom): The atom to adjust hydrogens for.
+    """
+    
+    expected_valence = get_expected_valence(atom)
+    
+    # Calculate current bonds to heavy atoms (excluding hydrogens)
+    current_bonds = 0
+    for bond in atom.GetBonds():
+        other_atom = bond.GetOtherAtom(atom)
+        if other_atom.GetAtomicNum() > 1:
+            current_bonds += bond_order_value(bond.GetBondType())
+    
+    # Calculate total explicit hydrogens
+    explicit_h = atom.GetNumExplicitHs()
+    implicit_h = atom.GetNumImplicitHs()
+    # Total bonds including explicit hydrogens
+    total_bonds = current_bonds + explicit_h + implicit_h
+    
+    
+    
+    # Calculate the difference between expected valence and current bonds
+    h_diff = expected_valence - total_bonds
+    
+    if h_diff > 0:
+        # Need to add hydrogens
+        atom.SetNumExplicitHs(explicit_h + int(h_diff))
+    elif h_diff < 0:
+        # Need to remove hydrogens
+        # Ensure we don't set negative hydrogens
+        
+        difference = int(explicit_h + h_diff )
+        if difference < 0:
+            atom.SetNumExplicitHs(0)
+            atom.SetFormalCharge(abs(difference))
+        else:
+            atom.SetNumExplicitHs(max(int(explicit_h + h_diff), 0))
+        
+    
+   
+    # Recalculate total bonds after adjusting explicit hydrogens
+    explicit_h = atom.GetNumExplicitHs()
+    implicit_h = atom.GetNumImplicitHs()
+    total_bonds = current_bonds + explicit_h + implicit_h
+    implicit_h = expected_valence - total_bonds
+    
+    
+    
+    
+
+def process_molecule(mol, bond_changes=None, atoms_to_remove=None, charges=None):
+    """
+    Process a molecule by applying bond changes and removing atoms,
+    adjusting hydrogens as necessary based on valence and charge.
+
+    Parameters:
+    mol (rdkit.Chem.Mol): The molecule to process.
+    bond_changes (list of tuples): Modifications to apply to bonds in the molecule.
+        Each tuple is (idx1, idx2, new_bond_type).
+    atoms_to_remove (list of ints): Atom indices to remove from the molecule.
+    charges (dict): Dictionary mapping atom indices to formal charges.
+
+    Returns:
+    rdkit.Chem.Mol: The processed molecule.
+    """
+    # Create a mutable copy of the molecule
+    mol = Chem.RWMol(mol)
+    
+    # Apply bond changes
+    if bond_changes:
+        for idx1, idx2, new_bond_type in bond_changes:
+            bond = mol.GetBondBetweenAtoms(idx1, idx2)
+            if bond is not None:
+                old_bond_type = bond.GetBondType()
+                if old_bond_type != new_bond_type:
+                    bond.SetBondType(new_bond_type)
+                    # Adjust hydrogens on both atoms
+                    for idx in [idx1, idx2]:
+                        atom = mol.GetAtomWithIdx(idx)
+                        adjust_hydrogens(atom, s= True)
+            else:
+                # Bond does not exist; add it
+                mol.AddBond(idx1, idx2, new_bond_type)
+                # Adjust hydrogens on both atoms
+                for idx in [idx1, idx2]:
+                    atom = mol.GetAtomWithIdx(idx)
+                    adjust_hydrogens(atom, s = True)
+            
+            
+    
+    # Remove atoms
+    if atoms_to_remove:
+        # Sort in reverse to prevent index shifting
+        for idx in sorted(atoms_to_remove, reverse=True):
+            if idx >= mol.GetNumAtoms():
+                raise IndexError(f"Atom index {idx} is out of range for the molecule.")
+            atom = mol.GetAtomWithIdx(idx)
+            neighbors = [nbr.GetIdx() for nbr in atom.GetNeighbors()]
+            mol.RemoveAtom(idx)
+            # After removal, adjust hydrogens on neighboring atoms
+            for nbr_idx in neighbors:
+                if nbr_idx >= mol.GetNumAtoms():
+                    continue  # Neighbor might have been removed in earlier iterations
+                nbr_atom = mol.GetAtomWithIdx(nbr_idx)
+                adjust_hydrogens(nbr_atom)
+    
+    # Set formal charges
+    if charges:
+        for idx, charge in charges.items():
+            if idx >= mol.GetNumAtoms():
+                print('ChemEM Warning: Charged atom with idx {idx} has been removed.')
+                continue
+                #raise IndexError(f"Atom index {idx} is out of range for the molecule.")
+            atom = mol.GetAtomWithIdx(idx)
+            atom.SetFormalCharge(charge)
+            adjust_hydrogens(atom)
+    
+    # Sanitize the molecule to ensure valence and bonding are correct
+    
+    
+    try:
+        Chem.SanitizeMol(mol)
+    except Chem.rdchem.KekulizeException as e:
+        raise ValueError(f"Sanitization failed: {e}")
+    except Exception as e:
+        raise ValueError(f"Validation failed: {e}")
+    
+    return mol.GetMol()
+
+
+def prepare_atoms_for_binding(mol, atom_idx, bond_type):
+    bond_value = bond_order_value(bond_type)
+    
+    if bond_value == 1.5:
+        #if its aromatic
+        bond_value = 1.0
+    
+    
+    
+    atom = mol.GetAtomWithIdx(atom_idx)
+    explicit_h = atom.GetNumExplicitHs()
+    implicit_h = atom.GetNumImplicitHs()
+
+    for num in range(explicit_h):
+        if bond_value == 0 or explicit_h == 0:
+            break
+        bond_value -= 1 
+        explicit_h -= 1 
+
+    
+    atom.SetNumExplicitHs(explicit_h)
+    
+    if bond_value > 0:
+        mol = Chem.AddHs(mol)
+        mol = Chem.RWMol(mol)
+        atom = mol.GetAtomWithIdx(atom_idx)
+        nei_hs = [i for i in atom.GetNeighbors() if i.GetSymbol() == 'H']
+        nei_hs = sorted(nei_hs, key = lambda x: x.GetIdx())
+
+        for hydrogen in nei_hs:
+            if bond_value == 0 or nei_hs == 0:
+                break
+            bond_value -= 1 
+            mol.RemoveAtom(hydrogen.GetIdx())
+        
+            
+    #need to adjust formal charge if bond_value > 1 
+    if bond_value > 0:
+        atom = mol.GetAtomWithIdx(atom_idx)
+        atom.SetFormalCharge(atom.GetFormalCharge() + bond_value)
+    
+    
+    return mol 
+
+def remove_hydrogens_attached_to_atom(mol, atom_idx, bond_type):
+    """
+    Remove hydrogens attached to a specific atom.
+
+    Parameters:
+    mol (rdkit.Chem.Mol): The molecule.
+    atom_idx (int): Index of the atom from which to remove attached hydrogens.
+
+    Returns:
+    None
+    """
+
+    atom = mol.GetAtomWithIdx(atom_idx)
+    
+    
+    hydrogens = [nbr.GetIdx() for nbr in atom.GetNeighbors() if nbr.GetAtomicNum() == 1]
+    for h_idx in sorted(hydrogens, reverse=True):
+        mol.RemoveAtom(h_idx)
+    
+
+def combine_processed_molecules(ligand, residue, ligand_atom_idx, residue_atom_idx, bond_type):
+    """
+    Combine two processed molecules by forming a bond between specified atoms.
+
+    Parameters:
+    ligand (rdkit.Chem.Mol): The processed ligand molecule.
+    residue (rdkit.Chem.Mol): The processed residue molecule.
+    ligand_atom_idx (int): Atom index in the ligand to form the bond.
+    residue_atom_idx (int): Atom index in the residue to form the bond.
+    bond_type (rdkit.Chem.rdchem.BondType): The bond type.
+
+    Returns:
+    rdkit.Chem.Mol: The combined molecule.
+    """
+    # Remove hydrogens attached to the reactive atoms
+    ligand = Chem.RWMol(ligand)
+    residue = Chem.RWMol(residue)
+    #remove_hydrogens_attached_to_atom(ligand, ligand_atom_idx)
+    ligand = prepare_atoms_for_binding(ligand, ligand_atom_idx, bond_type)
+    
+    
+    #remove_hydrogens_attached_to_atom(residue, residue_atom_idx)
+    residue = prepare_atoms_for_binding(residue, residue_atom_idx, bond_type)
+   
+    
+    # Combine the molecules
+    combined_mol = Chem.CombineMols(ligand, residue)
+    combined_rwmol = Chem.RWMol(combined_mol)
+    # Adjust residue atom indices
+    residue_offset = ligand.GetNumAtoms()
+    residue_atom_idx_combined = residue_atom_idx + residue_offset
+    # Add bond
+    
+
+    combined_rwmol.AddBond(ligand_atom_idx, residue_atom_idx_combined, bond_type)
+    combined_rwmol_hs = Chem.AddHs(combined_rwmol)
+
+    Chem.SanitizeMol(combined_rwmol_hs)
+    
+    return combined_rwmol.GetMol()
+
+
+def write_to_sdf( mol, file_name, conf_num=0, removeHs = False):
+        '''
+        write 3d mol to sdf file
+
+        Parameters
+        ----------
+        mol : mol (rdkit.Chem.Mol)
+
+        file_name : str
+            Output file
+        conf_num : int, optional
+            conformation_number. The default is 0.
+        removeHs : bool, optional
+            whether to remove hydrogens when writting. The default is False.
+
+        Returns
+        -------rt
+        None.
+
+        '''
+        
+        writer = Chem.SDWriter(file_name)
+        writer.write(mol, confId=conf_num)
+
+def get_charges_from_molecule(mol):
+    """
+    Extract formal charges from an RDKit molecule.
+
+    Parameters:
+    mol (rdkit.Chem.Mol): The molecule.
+
+    Returns:
+    dict: Dictionary mapping atom indices to formal charges.
+    """
+    charges = {}
+    for atom in mol.GetAtoms():
+        charge = atom.GetFormalCharge()
+        if charge != 0:
+            charges[atom.GetIdx()] = charge
+    return charges
+
+def get_residue_charges(residue, residue_name, atom_name_rd_idx):
+    """
+    Assign charges to a protein residue based on its name.
+
+    Parameters:
+    residue (rdkit.Chem.Mol): The residue molecule.
+    residue_name (str): The three-letter code of the residue (e.g., 'LYS').
+
+    Returns:
+    dict: Dictionary mapping atom indices to formal charges.
+    """
+    charges = {}
+    rd_idx_atom_name = {j:i for i,j in atom_name_rd_idx.items()}
+    # Mapping from residue names to atom symbols and expected charges
+    residue_charge_info = {
+        'LYS': {'NZ': +1},   # Lysine side-chain nitrogen is positively charged
+        'ARG': {'NH1': +1},   # Arginine guanidinium nitrogens are positively charged
+        'ASP': {'OD1': -1},   # Aspartic acid side-chain oxygens are negatively charged
+        'GLU': {'OE1': -1},   # Glutamic acid side-chain oxygens are negatively charged
+        'HIS': {'ND1': +1},   # Histidine can be positively charged
+        # Add more residues as needed
+    }
+    
+
+    if residue_name in residue_charge_info:
+        charge_info = residue_charge_info[residue_name]
+        for atom in residue.GetAtoms():
+            atom_idx = atom.GetIdx()
+            symbol = rd_idx_atom_name[atom_idx]
+            
+            # Assign charge if atom symbol matches and charge is non-zero
+            if symbol in charge_info and charge_info[symbol] != 0:
+                charges[atom.GetIdx()] = charge_info[symbol]
+    else:
+        # For other residues, assume no charge
+        pass
+
+    return charges
+
+
+def set_explict_hs(mol):
+    mol = Chem.AddHs(mol)
+    mol = Chem.RWMol(mol)
+    hydrogens_to_remove = []
+    for atom in mol.GetAtoms():
+        
+        nei_h = [i for i in atom.GetNeighbors() if i.GetSymbol() == 'H']
+        
+        atom.SetNumExplicitHs(len(nei_h))
+        for hydrogen in nei_h:
+            hydrogens_to_remove.append(hydrogen.GetIdx())
+    
+    for hydrogen_idx in sorted(hydrogens_to_remove, reverse = True):
+        mol.RemoveAtom(hydrogen_idx)
+    
+        
+    m2 = mol.GetMol() 
+    
+   
+    
+    return m2
+    
+    
+    
 
 def combine_molecules_and_react(ligand, 
-                                residue, 
+                                residue_name,
                                 ligand_atom_idx, 
                                 residue_atom_idx, 
                                 bond_type,
-                                protein_bonds_to_change,
-                                ligand_bonds_to_change,
-                                protein_atoms_to_remove,
-                                ligand_atoms_to_remove):
-    
-    ligand.GetAtomWithIdx(ligand_atom_idx).SetNumExplicitHs(0)
-    residue.GetAtomWithIdx(residue_atom_idx).SetNumExplicitHs(0)
-    
-    combined_mol = Chem.CombineMols(ligand, residue)
-    combined_rwmol = Chem.RWMol(combined_mol)
-    residue_new_zero_idx = ligand.GetNumAtoms()
-    residue_bond_point = residue_atom_idx + residue_new_zero_idx
-    combined_rwmol.AddBond(ligand_atom_idx, residue_bond_point , bond_type)
-    
+                                residue_bond_changes=None,
+                                ligand_bond_changes=None, 
+                                residue_atoms_to_remove=None,
+                                ligand_atoms_to_remove=None, 
+                                ):
+    """
+    Process ligand and residue molecules, automatically detect charges, and combine them.
 
-    for idx1, idx2, bond in protein_bonds_to_change:
-        idx1 += residue_new_zero_idx 
-        idx2 += residue_new_zero_idx 
-        modify_bond_order(combined_rwmol, [(idx1,idx2, bond)])
+    Parameters:
+    ligand_smiles (str): SMILES string of the ligand.
+    residue_smiles (str): SMILES string of the residue.
+    residue_name (str): Three-letter code of the residue (e.g., 'LYS').
+    ligand_atom_idx (int): Atom index in the ligand to form the bond.
+    residue_atom_idx (int): Atom index in the residue to form the bond.
+    bond_type (rdkit.Chem.rdchem.BondType): The bond type.
+
+    Other parameters are the same as before.
+
+    Returns:
+    str: SMILES string of the combined molecule.
+    rdkit.Chem.Mol: The combined molecule.
+    """
+    # Convert SMILES to RDKit molecules
+    
+    
     
    
-    modify_bond_order(combined_rwmol, ligand_bonds_to_change)
+    ligand = Chem.MolFromSmiles(ligand)
+    ligand = set_explict_hs(ligand)
+    residue_smiles, name_idx = RD_PROTEIN_SMILES[residue_name]
     
-    protein_atoms_to_remove = [i + residue_new_zero_idx for i in protein_atoms_to_remove]
-    remove_atoms(combined_rwmol, protein_atoms_to_remove)
-    remove_atoms(combined_rwmol, ligand_atoms_to_remove)
+    residue = Chem.MolFromSmiles(residue_smiles)
+    residue = set_explict_hs(residue)
+    # Get charges from molecules
+    ligand_charges = get_charges_from_molecule(ligand)
+    residue_charges = get_residue_charges(residue, residue_name, name_idx)
+
+    # Process ligand
+    ligand = process_molecule(
+        ligand,
+        bond_changes=ligand_bond_changes,
+        atoms_to_remove=ligand_atoms_to_remove,
+        charges=ligand_charges
+    )
     
-    Chem.SanitizeMol(combined_rwmol)
-    # Convert to SMILES and return
-    product_smiles = Chem.MolToSmiles(combined_rwmol)
+    if ligand_atoms_to_remove is not None:
+        for num in ligand_atoms_to_remove:
+            if num < ligand_atom_idx:
+                ligand_atom_idx -= 1 
+
+    # Process residue
+    residue = process_molecule(
+        residue,
+        bond_changes=residue_bond_changes,
+        atoms_to_remove=residue_atoms_to_remove,
+        charges=residue_charges
+    )
+    if residue_atoms_to_remove is not None:
+        for num in residue_atoms_to_remove:
+            if num < residue_atom_idx:
+                residue_atom_idx -= 1 
     
-    return product_smiles, combined_rwmol
+
+    # Combine the processed molecules
+    combined_mol = combine_processed_molecules(ligand, residue, ligand_atom_idx, residue_atom_idx, bond_type)
+    # Generate SMILES
+    
+    
+    
+    smiles = Chem.MolToSmiles(combined_mol)
+    
+    return smiles, combined_mol, ligand_atom_idx, residue_atom_idx
+
+#------WORKING RDKIT COVALENT LINKAGE END----
+    
     
 
 def save_image_temporarily(image):
@@ -600,4 +1035,275 @@ def remove_temporary_file(temp_file):
         print(f"An error occurred deleting image {temp_file}: {e}.")
 
     
+def convert_parmed_to_rdkit(parm):
     
+    mol = Chem.RWMol()
+    # Add atoms
+    atom_map = {}
+    for i, atom in enumerate(parm.atoms):
+        rd_atom = Chem.Atom(atom.element_name)
+        atom_map[atom] = mol.AddAtom(rd_atom)
+
+
+def hydrogen_mapping(mol, residue_atoms_converted, residue_name ):
+    
+    hydrogen_data = RD_PROTEIN_HYDROGENS[residue_name]
+    hydrogen_name_to_idx = {}
+    hydrogen_name_to_heavy_atom_name = {}
+    for atom_name, index in  residue_atoms_converted.items():
+        
+        atom_hydrogens = [i for i in hydrogen_data if hydrogen_data[i] == atom_name]
+        
+        mol_atom = mol.GetAtomWithIdx(index)
+        mol_atom_hydrogens = [i for i in mol_atom.GetNeighbors() if i.GetSymbol() == 'H']
+       
+        
+        for hydrogen_name, hydrogen_atom in zip(atom_hydrogens, mol_atom_hydrogens):
+            hydrogen_name_to_idx[hydrogen_name] = hydrogen_atom.GetIdx()
+            hydrogen_name_to_heavy_atom_name[hydrogen_name] = atom_name
+    return hydrogen_name_to_idx, hydrogen_name_to_heavy_atom_name
+        
+
+def translate_and_rotate_molecule(coords, index1, target1, index2, target2):
+    """
+    Translate and rotate a molecule so that two atoms are moved to specific target points.
+    Improved to handle edge cases and use quaternions for rotations.
+    """
+    # Translate the molecule so that the first atom is at target1
+    translation_vector = target1 - coords[index1]
+    translated_coords = coords + translation_vector
+
+    # Calculate the vector of the second atom after translation
+    moved_atom_vector = translated_coords[index2] - target1
+    target_vector = target2 - target1
+
+    # Normalize vectors
+    moved_atom_norm = np.linalg.norm(moved_atom_vector)
+    target_norm = np.linalg.norm(target_vector)
+
+    if moved_atom_norm == 0 or target_norm == 0:
+        return translated_coords  # No rotation needed if one vector is zero
+
+    moved_atom_vector_normalized = moved_atom_vector / moved_atom_norm
+    target_vector_normalized = target_vector / target_norm
+
+    # Calculate the axis and angle for rotation
+    axis = np.cross(moved_atom_vector_normalized, target_vector_normalized)
+    axis_norm = np.linalg.norm(axis)
+
+    if axis_norm == 0:
+        return translated_coords  # Vectors are parallel, no rotation needed
+
+    angle = np.arccos(np.clip(np.dot(moved_atom_vector_normalized, target_vector_normalized), -1.0, 1.0))
+
+    # Use quaternion for rotation to avoid potential gimbal lock issues
+    rotation = R.from_quat(R.from_rotvec(axis / axis_norm * angle).as_quat())
+    rotated_coords = rotation.apply(translated_coords - target1) + target1
+
+    return rotated_coords
+
+
+RD_PROTEIN_HYDROGENS = {'CYS': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG': 'SG'},      
+                        
+ 'MET': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG',
+  'HE1': 'CE',
+  'HE2': 'CE',
+  'HE3': 'CE'},
+ 
+ 'GLY': {'H': 'N', 'H2': 'N', 'H3': 'N', 'HA2': 'CA', 'HA3': 'CA'},
+ 'ASP': {'H': 'N', 'H2': 'N', 'H3': 'N', 'HA': 'CA', 'HB2': 'CB', 'HB3': 'CB'},
+ 'ALA': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB1': 'CB',
+  'HB2': 'CB',
+  'HB3': 'CB'},
+ 
+ 'VAL': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB': 'CB',
+  'HG11': 'CG1',
+  'HG12': 'CG1',
+  'HG13': 'CG1',
+  'HG21': 'CG2',
+  'HG22': 'CG2',
+  'HG23': 'CG2'},
+ 
+ 'PRO': {'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG',
+  'HD2': 'CD',
+  'HD3': 'CD'},
+ 
+ 'PHE': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HD1': 'CD1',
+  'HD2': 'CD2',
+  'HE1': 'CE1',
+  'HE2': 'CE2',
+  'HZ': 'CZ'},
+ 
+ 'ASN': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HD21': 'ND2',
+  'HD22': 'ND2'},
+ 
+ 'THR': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB': 'CB',
+  'HG1': 'OG1',
+  'HG21': 'CG2',
+  'HG22': 'CG2',
+  'HG23': 'CG2'},
+ 
+ 'HIS': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HD2': 'CD2',
+  'HD1': 'ND1',
+  'HE1': 'CE1',
+  'HE2': 'NE2'},
+ 
+ 'GLN': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG',
+  'HE21': 'NE2',
+  'HE22': 'NE2'},
+ 
+ 'ARG': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG',
+  'HD2': 'CD',
+  'HD3': 'CD',
+  'HE': 'NE',
+  'HH11': 'NH1',
+  'HH12': 'NH2',
+  'HH21': 'NH2',
+  'HH22': 'NH2'},
+ 
+ 'TRP': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HD1': 'CD1',
+  'HE1': 'NE1',
+  'HE3': 'CE3',
+  'HZ2': 'CZ2',
+  'HZ3': 'CZ3',
+  'HH2': 'CH2'},
+ 
+ 'ILE': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB': 'CB',
+  'HG12': 'CG1',
+  'HG13': 'CG1',
+  'HG21': 'CG2',
+  'HG22': 'CG2',
+  'HG23': 'CG2',
+  'HD11': 'CD1',
+  'HD12': 'CD1',
+  'HD13': 'CD1'},
+ 
+ 'SER': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG': 'OG'},
+ 
+ 'LYS': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG',
+  'HD2': 'CD',
+  'HD3': 'CD',
+  'HE2': 'CE',
+  'HE3': 'CE',
+  'HZ1': 'NZ',
+  'HZ2': 'NZ',
+  'HZ3': 'NZ'},
+ 
+ 'LEU': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG': 'CG',
+  'HD11': 'CD1',
+  'HD12': 'CD1',
+  'HD13': 'CD1',
+  'HD21': 'CD2',
+  'HD22': 'CD2',
+  'HD23': 'CD2'},
+ 
+ 'GLU': {'HA': 'CA',
+  'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HG2': 'CG',
+  'HG3': 'CG'},
+ 
+ 'TYR': {'H': 'N',
+  'H2': 'N',
+  'H3': 'N',
+  'HA': 'CA',
+  'HB2': 'CB',
+  'HB3': 'CB',
+  'HD1': 'CD1',
+  'HD2': 'CD2',
+  'HE1': 'CE1',
+  'HE2': 'CE2',
+  'HH': 'OH'}}
