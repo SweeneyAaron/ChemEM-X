@@ -107,7 +107,7 @@ class CHEMEM(HtmlToolInstance):
         
         #enable for debugging
         #TODO!
-        self.session.metadata = self
+        #self.session.metadata = self
     
 
         
