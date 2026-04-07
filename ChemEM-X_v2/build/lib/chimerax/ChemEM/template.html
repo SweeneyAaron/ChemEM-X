@@ -1,0 +1,2268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChemEM</title>
+    <link rel="stylesheet" type="text/css" href="/chimerax/ui/html/css/bootstrap-3.3.7.css">
+    <link rel="stylesheet" type="text/css" href="chemem.css">
+</head>
+<body>
+
+     <h1>
+         <img src="img/chemEM_logo_transparent.png" alt="ChemEM" style="max-height: 60px;">
+     </h1>
+     <!-- Tab Links -->
+     <div class="tab">
+         <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'SetupTab'); getAvalilblePlatforms()">Setup</button>
+         <button class="tablinks" onclick="openTab(event, 'LigandsTab')">Ligands</button>
+         <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Sites</button>
+         <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
+         <button class="tablinks" onclick="openTab(event, 'DockTab')">Dock</button>
+         <button class="tablinks" onclick="openTab(event, 'BuildTab')">Build</button>
+         <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
+         
+     </div>
+      
+     <div id="SetupTab" class="tabcontent">
+         <div class="container" id="general">
+             <fieldset>
+                 <legend>General parameters</legend>
+                 
+                     <!-- params needced for running -->
+                     <div class="form-group file-input-group">
+                         <label for="outputDirectory">Project Output:</label>
+                         <button type="button" class="dialog-button" id="outputDirectory" onclick="setDir('output')">Choose Folder</button>
+                         <span class="file-path" id="output"></span>
+                     </div>
+                     
+                     <div class="form-group file-input-group">
+                         <label for="chememBackend">Add ChemEM Executable:</label>
+                         <button type="button" class="dialog-button" id="chememBackend" onclick="readFileAndAlterChemEM('avalible_chemem_exes')">Choose File</button>
+                         <span class="file-path" id="chememBackendPath"></span>
+                     </div>
+                     
+                     <div>
+                      <label for="chememExes">ChemEM Executable:</label>
+                          <select id="chememExes" name="chememExes">
+                          <!-- Options will be populated by populateDropdown function -->
+                          </select>
+                     </div>
+                     
+                     <label for="avaliblePlatforms">Platform:</label>
+                         <select id="avaliblePlatforms" name="avaliblePlatforms">
+                             
+                         </select>
+                     
+                 </fieldset>
+             </div> <!-- end of container-->
+             
+            <div class="container" id="general">
+                <fieldset>
+                    <legend>Model parameters</legend>
+                        <label for="models">Protein:</label>
+                            <select id="models" name="models" >
+                            <!-- Options will be populated by populateDropdown function -->
+                            </select>
+                        
+                        <label for="maps">Cryo-EM map:</label>
+                            <select id="maps" name="maps">
+                                <option value="N/A">N/A</option> <!-- Default None option -->
+                            </select>
+                        
+                        <label for="resolution">Resolution (Å):</label>
+                        <input type="number" id="resolution" name="resolution" step="0.1" placeholder="E.g., 2.6">
+                    
+                    <!-- ligand inputs -->
+                    <!-- Ligand SMILES input with Add button -->
+                    <div class="form-group input-with-button">
+                        <label for="ligandSmiles">Ligand SMILES:</label>
+                        <input type="text" id="ligandSmiles" name="ligandSmiles" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                        <button type="button" class="add-button" onclick="addLigand()">Add</button>
+                    </div>
+    
+                    <!-- Ligand File input with Add button -->
+                    <div class="form-group input-with-button">
+                        
+                        <label for="ligandFile">Ligand File:</label>
+                        <!--<input type="file" id="ligandFile" name="ligandFile">-->
+                        <div class="form-group file-input-group">
+                        
+                            <button type="button" class="dialog-button" id="ligandFile" onclick="readFile('ligandFilePath')">Choose File</button>
+                            <span class="file-path" id="ligandFilePath"></span>
+                        </div>
+                        <button type="button" class="add-button" onclick="addLigandFile()">Add</button>
+                    </div>
+                    
+                     <!-- Interactive list for added ligands -->
+                    <div class="form-group">
+                        <label for="ligandList">Added Ligands:</label>
+                        <ul id="ligandList"></ul>
+                    </div>
+                    
+                    
+                    <!-- List for added centroids -->
+                    <div class="form-group">
+                        <label for="centroidList">Added Binding Sites:</label>
+                        <ul id="centroidList"></ul>
+                    </div>
+                    
+                </fieldset>
+            </div><!-- end of container-->
+    </div><!-- end of tab -->
+    
+    <div id="LigandsTab" class="tabcontent">
+        <div class="container" id="ligandcontent">
+            <legend>Protonate Ligands</legend>
+                
+                
+                <div class="form-group pH-group">
+                    <label for="pHMax">pH max:</label>
+                    <input type="number" id="pHMax" name="pHMax" step="0.01" value="8.4" style="width: 100px;">
+            
+                    <label for="pHMin">pH min:</label>
+                    <input type="number" id="pHMin" name="pHMin" step="0.01" value="6.4" style="width: 100px;">
+            
+                    <label for="pHSTD">pKa Precision:</label>
+                    <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" style="width: 100px;">
+                </div>
+                <!-- Ligand SMILES input with Add button -->
+                <div class="form-group input-with-button">
+                    <label for="ligandSmilesForProtonation">Ligand SMILES:</label>
+                    <input type="text" id="ligandSmilesForProtonation" name="ligandSmilesForProtonation" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                    <button type="button" class="add-button" onclick="ProtonateLigand()">Protonate</button>
+                </div>
+                
+        </div>
+        
+        <div class="container" id="chemical-structure">
+            
+            <fieldset>
+            
+                <legend>Chemical Structure</legend>
+                
+            
+            </fieldset>
+        </div>
+        
+        <div class="container" id="protonation-states">
+        <fieldset>
+            <legend>Protonation States</legend>
+            <label style="font-weight: bold;">Protonated SMILES:</label>
+            <ul id="protonatedSmilesList"></ul>
+        </fieldset>
+        </div>
+    
+    </div><!-- end of tab-->
+    
+    <div id="BindingSiteTab" class="tabcontent">
+         <div class="container" id="binding-site-from-centroid">
+             <legend>Detect Binding sites</legend>
+             <button type="button" onclick="activateMarkerPlacement()">Define From Marker</button>
+             <button type="button" onclick="autoSiteFinder()">Autodetect sites</button>
+         </div>
+         
+         <div class="container" id="manual-binding-site">
+             
+             <fieldset>
+             
+                 <legend>Binding Sites</legend>
+                 <label style="font-weight: bold;">Binding Sites</label>
+                 <ul id="manualBindingSitesList"></ul>
+             
+             </fieldset>
+         </div>
+         
+         <div class="container" id="add-solvent-molecules">
+            <fieldset>
+            <legend>Insert Solvent Molecules</legend>
+             </fieldset>
+         </div>
+
+         <div class="container" id="add-ions-molecules">
+                <fieldset>
+            <legend>Add Ions</legend>
+                    <div class="form-group">
+                        <label for="ionTypeSelect">Ion Type:</label>
+                        <select id="ionTypeSelect"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="coordGeomSelect">Coordination Geometry:</label>
+                        <select id="coordGeomSelect"></select>
+                    </div>
+
+                    <div class="form-group">
+                        <label style="font-weight: bold;">Coordination Preview</label>
+                        <div id="ionGeometryCanvas" style="border: 1px solid #c5cae9; border-radius: 8px; background: #f8f8f8; min-height: 320px; padding: 8px;"></div>
+                    </div>
+
+                    <button type="button" id="addIonRunButton" onclick="runAddIonFromUI()">Run Add Ions</button>
+                    <div id="addIonRunStatus" style="margin-top: 10px; color: #555; font-size: 0.95em;"></div>
+                </fieldset>
+         </div>
+
+
+    
+    </div> <!-- end of tab-->
+    
+    <div id="MaskTab" class="tabcontent">
+       
+        <div class="container" id="ligand-masking-container">
+          <fieldset>
+            <legend>Ligand density masking</legend>
+            
+            <select id="protocolDropdown" onchange="handleProtocolChange()">
+              <option value="alpha-mask">Alpha Mask</option>
+              <option value="significant-features">Significant Features Mask</option>
+            </select>
+            
+            <!-- Add the mask specifc options herer TODO! -->
+            
+            <button type="button" onclick="runAutoMask()">Run</button>
+          </fieldset>
+        </div>
+    
+    
+    </div> <!-- end of tab-->
+    
+    <div id="DockTab" class="tabcontent">
+        <div class="container" id="ligand-masking-container">
+            <fieldset>
+                <legend>Dock Ligand</legend>
+                <!-- protocols -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        Minimize Solutions
+                        <input type="checkbox" id="minimiseDock" name="minimiseDock">
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        MMGBSA Rescore
+                        <input type="checkbox" id="mmgbsaRescoreDock" name="mmgbsaRescoreDock">
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                
+                <!--dock options -->
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        Flexible rings
+                        <input type="checkbox" id="flexRingsDock" name="flexRingsDock">
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        Include waters
+                        <input type="checkbox" id="waterIncDock" name="waterIncDock">
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+                
+                <!--Map options-->
+                <label for="dockMapProtocol">Map Mask Protocol:</label>
+                <select id="dockMapProtocol" >
+                  <option value="significant-features">Significant Features Mask</option>
+                  <option value="alpha-mask">Alpha Mask</option>
+                </select>
+                
+                
+                <label for="dockClusterCutoff">RMSD Cluster solutions (Å):</label>
+                <input type="number" id="dockClusterCutoff" name="dockClusterCutoff" step="0.1" value="1.5">
+                
+                <label for="energyClusterCutoff">Energy Cutoff (Å):</label>
+                <input type="number" id="energyClusterCutoff" name="energyClusterCutoff" step="0.1" value="3.0">
+                
+                
+                <!-- make this a drop down Advanced options-->
+                <div class="container" id="advanced-options">
+                    <fieldset>
+                        <legend>
+                            <span class="toggle-arrow" onclick="toggleAdvancedOptions()">Advanced Options &#9660;</span>
+                        </legend>
+                        
+                        <div class="collapse" id="advancedOptionsContent">
+                            
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    Split Site
+                                    <input type="checkbox" id="splitSitesDock" name="splitSitesDock">
+                                    <span class="checkmark"></span>
+                                </label>
+                            </div>
+                            
+                         
+                            
+                            <div class="form-group">
+                                <label class="checkbox-label">
+                                    No Parallel Processing
+                                    <input type="checkbox" id="noParaDock" name="noParaDock">
+                                    <span class="checkmark"></span>
+                                </label>
+                            </div>
+                            
+                            <label for="biasRadius">Bias Radius (Å):</label>
+                            <input type="number" id="biasRadius" name="biasRadius" step="0.5" placeholder="E.g.: 12.0">
+                            
+                            <label for="sciWeight">SCI Score weight:</label>
+                            <input type="number" id="sciWeight" name="sciWeight" step="1.0" placeholder="E.g.: 300.0">
+                            
+                            <label for="globalSearchDock">N Global solutions per iteration:</label>
+                            <input type="number" id="globalSearchDock" name="globalSearchDock" step="100.0" placeholder="E.g.: 1000.0">
+                            
+                            <label for="localSearchDock">N local solutions per iteration:</label>
+                            <input type="number" id="localSearchDock" name="localSearchDock" step="1.0" placeholder="E.g.: 10.0">
+                            
+                            
+
+                        </div><!-- end of advance options -->
+                    </fieldset>
+                
+                </div><!--end of advanced options -->
+                
+                <button type="button" onclick="runDocking()">Run</button>
+            </fieldset> 
+        </div>
+        
+        <div class="container" id="jobcontent">
+            <legend>Submitted Jobs</legend>
+            <div id="jobListContainer">
+                <ul id="jobList"></ul>
+            </div>
+        </div>
+        
+        <div class="container" id="dockResultsContainer">
+            <legend>Docking Results</legend>
+            <div id="dockResults" class="scrollable"></div>
+        </div>
+        
+    </div> <!-- end of tab -->
+    
+
+   
+    <div id="BuildTab" class="tabcontent">
+        <div class="container" id="BuildSimulationContent">
+            <legend>Simulation Builder</legend> 
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Restrict simulation to selected residues
+                    <input type="checkbox" id="simulateSelectedAtoms" name="simulateSelectedAtoms">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+
+            <label for="mapBias">Map Bias Constant:</label>
+            <input type="number" id="mapBias" name="mapBias" step="1.0" value="75">
+            
+            <label for="startTemperatureInput">Temperature (K):</label>
+            <input type="number" id="startTemperatureInput" value="100"/>
+            
+            <label for="avalibleSolventModels">Implicit Solvent:</label>
+              <select id="avalibleSolventModels" name="avalibleSolventModels">
+                  <!-- Dropdown Options for Platform -->
+                  <option value="None">None</option>
+                  <option value="GBn2">GBn2 solvation model</option>
+                  <option value="GBn">GBn solvation model</option>
+                  <option value="OBC2">Onufriev-Bashford-Case GBSA (GBOBC-II)</option>
+                  <option value="OBC1">Onufriev-Bashford-Case GBSA (GBOBC-I)</option>
+                  <option value="HCT">Hawkins-Cramer-Truhlar</option>
+              </select>
+              
+            
+            
+            
+            <legend>Add Ligand To Simulation</legend> 
+            <!-- Ligand File input with Add button -->
+            <div class="form-group input-with-button">
+                <label for="ligandSmiles">Ligand SMILES:</label>
+                <input type="text" id="ligandSimulationSmiles" name="ligandSimulationSmiles" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                <button type="button" class="add-button" onclick="addLigandToSmiulation()">Add</button>
+            </div>
+            
+            
+            <div class="form-group input-with-button">
+                
+                <label for="ligandFile">Ligand File:</label>
+                <!--<input type="file" id="ligandFile" name="ligandFile">-->
+                <div class="form-group file-input-group">
+                
+                    <button type="button" class="dialog-button" id="ligandSimulationFile" onclick="readFile('ligandSimulationFilePath')">Choose File</button>
+                    <span class="file-path" id="ligandSimulationFilePath"></span>
+                </div>
+                <button type="button" class="add-button" onclick="addLigandFileToSimulation()">Add</button>
+            </div>
+            
+           <div class="form-group">
+              <label>Ligands in Simulation:</label>
+              <ul id="ligandSimulationList"></ul>
+          </div>
+
+        </div>
+        
+         <!-- restraints -->
+         
+         
+         <!-- Restraints Section -->
+        <div class="container" id="BuildSimulationRestraints">
+          <fieldset class="panel restraints-fieldset">
+            <legend>Simulation Restraints On Start</legend>
+            
+            <!-- Protein Constraints Group -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                Constrain protein
+                <input type="checkbox" id="constrainProtein" name="constrainProtein">
+                <span class="checkmark"></span>
+              </label>
+        
+              <div class="checkbox-subgroup">
+                <label class="checkbox-label">
+                  Backbone only
+                  <input type="checkbox" id="constrainProteinBackbone" name="constrainProteinBackbone">
+                  <span class="checkmark"></span>
+                </label>
+        
+                <label class="checkbox-label">
+                  Sidechain only
+                  <input type="checkbox" id="constrainProteinSidechain" name="constrainProteinSidechain">
+                  <span class="checkmark"></span>
+                </label>
+              </div>
+            </div>
+        
+            <!-- Ligand Constraints Group -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                Constrain ligand atoms
+                <input type="checkbox" id="constrainLigandAtoms" name="constrainLigandAtoms">
+                <span class="checkmark"></span>
+              </label>
+            </div>
+        
+            <!-- SSE Constraints Group -->
+            <div class="form-group">
+              <label class="checkbox-label">
+                Constrain Secondary Structure Elements (SSE's)
+                <input type="checkbox" id="constrainSSE" name="constrainSSE">
+                <span class="checkmark"></span>
+              </label>
+        
+              <div class="checkbox-subgroup">
+                <label class="checkbox-label">
+                  Helices
+                  <input type="checkbox" id="constrainHelices" name="constrainHelices">
+                  <span class="checkmark"></span>
+                </label>
+        
+                <label class="checkbox-label">
+                  Sheets
+                  <input type="checkbox" id="constrainSheets" name="constrainSheets">
+                  <span class="checkmark"></span>
+                </label>
+              </div>
+            </div>
+        
+          </fieldset>
+          <button type="button" onclick="buildSimulation()">Build</button>
+        </div>
+    </div><!-- end of tab -->
+    
+    
+    
+    
+    <div id="RunSimulationTab" class="tabcontent">
+        <div class="container" id="SimulationContent">
+        <legend>Simulation</legend>
+        </div>
+        
+        <div class="container" id="preprocResultsContent">
+        <legend>Control Panel</legend>
+            <label for="temperatureInput">Temperature (K):</label>
+            <input
+                  type="number"
+                  id="temperatureInput"
+                  step="1"
+                  onchange="commitTemperature(this)"
+            />
+            <label for="mapBiasInSim">Map Bias Constant:</label>
+            <input
+              type="number"
+              id="mapBiasInSim"
+              name="mapBiasInSim"
+              step="1.0"
+              onchange="commitMapBias(this)"
+            />
+            
+            <!--step size -->
+            
+            <label for="HbondTug">Restraints:</label>
+            <button id="SaltBridgeTug" onclick="SaltBridgeTug()">Saltbridge</button>
+            <button id="HbondTug" onclick="HBondTug()">HBond</button>
+            <button id="WeakHbondTug" onclick="WeakHBondTug()">Weak HBond</button>
+            <button id="PiPi-P-Tug" onclick="PiPiPTug()">π-P</button>
+            <button id="PiPi-T-Tug" onclick="PiPiTTug()">π-T</button>
+            
+            <button id="HBond-Pi-Tug" onclick="HBondPiTug()">π-Cation</button>
+            
+            <button id="Cation-Pi-Tug" onclick="CationPiTug()">π-Cation</button>
+            
+            <button id="Halogen-Pi-Tug" onclick="HalogenPiTug()">π-Halogen</button>
+            <button id="Halogen-Bond-Tug" onclick="HalogenBondTug()">Halogen Bond</button>
+            
+            <button id="toggleTugButton" onclick="toggleTugMode()">Toggle Tug Mode</button>
+            
+            
+            <label for="SimulatingAnneling">Algorithms:</label>
+            <button id="SimAnnButton" onclick="runSimulatedAnneling()">Simulated Annealing</button>
+            <button id="minimiseSimulationButton" onclick="minimiseSimulation()">Minimize</button>
+            
+            <label for="toggleButton">Control:</label>
+
+            <!-- Option A: two separate buttons (simple show/hide) -->
+            <button id="RunSimulationButton" onclick="handleRunClick()">Run</button>
+            <button id="PauseSimulationButton" onclick="handlePauseClick()" style="display:none;">Pause</button>
+            
+            <button id="StopSimulationButton" onclick="stopSimulation()">Stop</button> 
+            <button id="SaveSimulationButton">Save</button> 
+            <button id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button> 
+            <button id="AddCovelentLigand" onclick="AddCovelentLigandToSimulation()">Add Covelent Ligand</button>
+
+            <!-- undo -->
+        </div>
+        
+        <div class="container" id="preprocResultsContent">
+            <legend>Active Restraints</legend>
+            <div id="activeRestraintsContainer">
+                <ul id="activeRestraints"></ul>
+            </div>
+        </div>
+        
+        
+    </div><!-- end of tab -->
+    
+    
+    
+    
+    <script>
+    
+    function openTab(evt, tabName) {
+      // hide all tab panes
+      for (const el of document.getElementsByClassName("tabcontent")) {
+        el.style.display = "none";
+      }
+      // deactivate all tab buttons
+      for (const btn of document.getElementsByClassName("tablinks")) {
+        btn.classList.remove("active");
+      }
+      // show selected pane + activate button
+      document.getElementById(tabName).style.display = "block";
+      if (evt && evt.currentTarget) evt.currentTarget.classList.add("active");
+    }
+    
+    // open the default tab on load
+    window.addEventListener("DOMContentLoaded", () => {
+      const def = document.getElementById("defaultOpen");
+      if (def) def.click();  
+    });
+    
+    
+    function toggleAdvancedOptions() {
+        var content = document.getElementById("advancedOptionsContent");
+        var arrow = document.querySelector(".toggle-arrow");
+        if (content.style.display === "none" || content.style.display === "") {
+            content.style.display = "block";
+            arrow.innerHTML = "Advanced Options &#9650;"; // Arrow pointing up
+        } else {
+            content.style.display = "none";
+            arrow.innerHTML = "Advanced Options &#9660;"; // Arrow pointing down
+        }
+    }
+    
+    function sendSiteValueToBackend(action, siteValue) {
+        
+        var xhr = new XMLHttpRequest(); // Create a new XMLHttpRequest object
+        var url = action + "?siteValue=" + encodeURIComponent(JSON.stringify(siteValue)); // Construct the URL with action and query parameter
+        xhr.open("GET", url, true); // Prepare the request
+    
+        xhr.onreadystatechange = function() { // Call a function when the state changes
+            if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+                // Request finished. Do processing here.
+                console.log("Site value sent to backend:", siteValue);
+            }
+        }
+    
+        xhr.send(); // Send the request
+    }
+    
+    function sendParameterToBackend(command, dataId, dataValue, className ) {
+        const data = {
+        id : dataId,
+        value: dataValue,
+        class : className
+        };
+        sendSiteValueToBackend(command, data);
+    }
+    
+     function setDir(dir) {
+         
+         sendSiteValueToBackend("chemem:SetDir", dir);
+     
+     }
+     
+     function setFilePath( elementId, file){
+         document.getElementById(elementId).textContent = file;
+     }
+     
+     
+     
+     function readFile(file) {
+     //reads a file and adds it to chemem paramters 
+         sendSiteValueToBackend("chemem:ReadFile", file)
+     }
+     
+     function readFileAndAlterChemEM(file) {
+     //reads a file and alters the state of chemEM in the backend
+         sendSiteValueToBackend("chemem:ReadFileAndAlterChemEM", file)
+     }
+     
+     
+     function onExesPopulated() {
+         const selectElement = document.getElementById('chememExes');
+         if (selectElement.value) { 
+             sendParameterToBackend("chemem:SetCurrentExe", selectElement.value, selectElement.value, "PathParameter")
+         }
+        
+     }
+     
+    function updateSelect(elementId, options) {
+        const selectElement = document.getElementById(elementId);
+        
+        if (!selectElement) {
+            alert("No select element found with ID:");
+            return;
+        }
+        selectElement.innerHTML = ''; // Clear existing options
+        
+        if (elementId === "maps") {
+            // Add default None option
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            selectElement.appendChild(defaultOption);
+        }
+        if (elementId === "SimulationMaps") {
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            selectElement.appendChild(defaultOption);
+        }
+        if (elementId === "simulationModels") {
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            
+            selectElement.appendChild(defaultOption);
+            const selectedOption = document.createElement('option'); 
+            selectedOption.value = 'SelectedAtoms';
+            selectedOption.text = 'Selected Atoms';
+            selectElement.appendChild(selectedOption);
+        }
+        
+        options.forEach(optionValue => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.text = optionValue;
+            selectElement.appendChild(option);
+        });
+    }
+     
+    function getAvalilblePlatforms() {
+        sendSiteValueToBackend("chemem:GetAvaliblePlatforms", "None");
+    
+    }
+    
+    function addPlatformToList(textContent) {
+      const list = document.getElementById('avaliblePlatforms');
+      if (!list) {
+        console.error('The list was not found.');
+        return false;
+      }
+    
+      const label = String(textContent).trim();
+      if (!label) return false;
+    
+      //check if element exists in list alreday, do not duplicate platforms
+      const exists = Array.from(list.options).some(opt =>
+        (opt.textContent || '').trim().toLowerCase() === label.toLowerCase() ||
+        (opt.value || '').trim().toLowerCase() === label.toLowerCase()
+      );
+      if (exists) return false;
+    
+      const listItem = document.createElement('option');
+      listItem.textContent = label;
+      listItem.value = label; // keep value in sync
+      list.appendChild(listItem);
+      return true;
+    }
+    
+    function setPlatform(platform) {
+        sendSiteValueToBackend("chemem:SetPlatform", platform);
+    }
+    
+    
+    function onModelsPopulated() {
+        const selectElement = document.getElementById('models');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentModel", selectElement.value, selectElement.value, "ModelParameter");
+        }
+    }
+    
+    function onMapsPopulated() {
+        const selectElement = document.getElementById('maps');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentMap", selectElement.value, selectElement.value, "MapParameter");
+        }
+    }
+    
+    function selectOptionByValue(selectId, value) {
+      const selectElement = document.getElementById(selectId);
+      if (selectElement) {
+        selectElement.value = value;
+        // Trigger change event if needed
+        const event = new Event('change');
+        selectElement.dispatchEvent(event);
+      }
+    }
+    
+    
+     //delay execution untill the user has stopped typing for n milliseconds, wrap function around it in DOM.
+     function debounce(func, delay) {
+         let debounceTimer;
+         return function() {
+             const context = this;
+             const args = arguments;
+             clearTimeout(debounceTimer);
+             debounceTimer = setTimeout(() => func.apply(context, args), delay);
+         };
+     }
+
+    //-------ion tab-------
+    const ION_TYPES = ["MG", "ZN", "CA", "MN", "FE2", "FE", "NA", "K", "CL", "LI"];
+
+    const ION_GEOMETRIES = [
+        { value: "Octahedral", label: "Octahedral" },
+        { value: "Square Planar", label: "Square Planar" },
+        { value: "linear", label: "linear" },
+        { value: "Trigonal Bipyramidal", label: "Trigonal Bipyramidal" },
+        { value: "Triganal Planer", label: "Triganal Planer" },
+        { value: "Square Pyrimidal", label: "Square Pyrimidal" },
+        { value: "Tetrahedral", label: "Tetrahedral" },
+        { value: "Pentagonal Bipyrimidal", label: "Pentagonal Bipyrimidal" }
+    ];
+
+    const ION_GEOMETRY_LAYOUTS = {
+        "Octahedral": [
+            { x: 0, y: -125, axial: true },
+            { x: 95, y: 0 },
+            { x: 50, y: 86 },
+            { x: -50, y: 86 },
+            { x: -95, y: 0 },
+            { x: 0, y: 125, axial: true }
+        ],
+        "Square Planar": [
+            { x: 0, y: -95 },
+            { x: 95, y: 0 },
+            { x: 0, y: 95 },
+            { x: -95, y: 0 }
+        ],
+        "Linear": [
+            { x: -125, y: 0 },
+            { x: 125, y: 0 }
+        ],
+        "Trigonal Bipyramidal": [
+            { x: -95, y: 50 },
+            { x: 95, y: 50 },
+            { x: 0, y: -70 },
+            { x: 0, y: -140, axial: true },
+            { x: 0, y: 140, axial: true }
+        ],
+        "Trigonal Planar": [
+            { x: 0, y: -105 },
+            { x: -92, y: 55 },
+            { x: 92, y: 55 }
+        ],
+        "Square Pyramidal": [
+            { x: 0, y: -95 },
+            { x: 95, y: 0 },
+            { x: 0, y: 95 },
+            { x: -95, y: 0 },
+            { x: 0, y: -140, axial: true }
+        ],
+        "Tetrahedral": [
+            { x: 0, y: -112 },
+            { x: -98, y: 38 },
+            { x: 98, y: 38 },
+            { x: 0, y: 125, axial: true }
+        ],
+        "Pentagonal Bipyramidal": [
+            { x: 0, y: -95 },
+            { x: 90, y: -30 },
+            { x: 56, y: 78 },
+            { x: -56, y: 78 },
+            { x: -90, y: -30 },
+            { x: 0, y: -145, axial: true },
+            { x: 0, y: 145, axial: true }
+        ]
+    };
+
+    const ION_GEOMETRY_LAYOUT_ALIASES = {
+        linear: "Linear",
+        "Triganal Planer": "Trigonal Planar",
+        "Square Pyrimidal": "Square Pyramidal",
+        "Pentagonal Bipyrimidal": "Pentagonal Bipyramidal"
+    };
+
+    function resolveIonGeometryLayout(geometryValue) {
+        return ION_GEOMETRY_LAYOUT_ALIASES[geometryValue] || geometryValue;
+    }
+
+    let ionCoordAssignments = [];
+    let ionCoordAssignmentsGeometry = null;
+
+    function initIonCoordAssignmentsForGeometry(geometryValue) {
+        const layoutKey = resolveIonGeometryLayout(geometryValue);
+        const points = ION_GEOMETRY_LAYOUTS[layoutKey] || [];
+        ionCoordAssignments = points.map((_, idx) => ({
+            site_index: idx,
+            atom_spec: null,
+            short_label: "dWat",
+            full_label: "dWat",
+            is_dummy: true
+        }));
+        ionCoordAssignmentsGeometry = geometryValue;
+    }
+
+    function ensureIonCoordAssignmentsForGeometry(geometryValue) {
+        const layoutKey = resolveIonGeometryLayout(geometryValue);
+        const nSites = (ION_GEOMETRY_LAYOUTS[layoutKey] || []).length;
+        if (
+            ionCoordAssignmentsGeometry !== geometryValue ||
+            ionCoordAssignments.length !== nSites
+        ) {
+            initIonCoordAssignmentsForGeometry(geometryValue);
+        }
+    }
+
+    function makeSvgNode(tag, attrs) {
+        const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        Object.entries(attrs).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                node.setAttribute(key, String(value));
+            }
+        });
+        return node;
+    }
+
+    function getCurrentIonCoordAtoms(geometryValue) {
+        ensureIonCoordAssignmentsForGeometry(geometryValue);
+        return ionCoordAssignments.map((site, idx) => site.atom_spec || `dWat${idx + 1}`);
+    }
+
+    function setAddIonStatus(message, isError = false) {
+        const status = document.getElementById("addIonRunStatus");
+        if (!status) return;
+        status.textContent = message;
+        status.style.color = isError ? "#a33" : "#555";
+    }
+
+    function requestIonCoordSiteAssignment(siteIndex) {
+        const geomSelect = document.getElementById("coordGeomSelect");
+        const geometryValue = geomSelect ? geomSelect.value : "Octahedral";
+        ensureIonCoordAssignmentsForGeometry(geometryValue);
+
+        if (siteIndex < 0 || siteIndex >= ionCoordAssignments.length) {
+            setAddIonStatus("Invalid coordination site selected.", true);
+            return;
+        }
+
+        sendParameterToBackend("chemem:AssignSelectedAtomToIonSite", 
+        siteIndex, siteIndex, "IntParameter");
+
+        
+        setAddIonStatus(`Assigning selected atom to site ${siteIndex + 1}...`);
+    }
+
+    function setIonCoordSiteFromBackend(siteIndex, atomSpec, shortLabel, fullLabel) {
+        const geomSelect = document.getElementById("coordGeomSelect");
+        const geometryValue = geomSelect ? geomSelect.value : "Octahedral";
+        ensureIonCoordAssignmentsForGeometry(geometryValue);
+
+        const idx = Number(siteIndex);
+        if (!Number.isFinite(idx) || idx < 0 || idx >= ionCoordAssignments.length) {
+            setAddIonStatus("Backend returned an invalid coordination site index.", true);
+            return;
+        }
+
+        const resolvedSpec = atomSpec ? String(atomSpec) : null;
+        const rawShort = shortLabel ? String(shortLabel) : "dWat";
+        const resolvedShort = rawShort.length > 10 ? `${rawShort.slice(0, 7)}...` : rawShort;
+        const resolvedFull = fullLabel ? String(fullLabel) : resolvedShort;
+
+        ionCoordAssignments[idx] = {
+            site_index: idx,
+            atom_spec: resolvedSpec,
+            short_label: resolvedShort,
+            full_label: resolvedFull,
+            is_dummy: !resolvedSpec
+        };
+
+        renderIonGeometrySketch();
+        if (resolvedSpec) {
+            setAddIonStatus(`Assigned ${resolvedSpec} to site ${idx + 1}.`);
+        } else {
+            setAddIonStatus(`Site ${idx + 1} reset to dWat.`);
+        }
+    }
+
+    function addAtomSpecToIonFixer(atomSpec) {
+        const rawSpec = atomSpec === undefined || atomSpec === null ? "" : String(atomSpec).trim();
+        if (!rawSpec) {
+            setAddIonStatus("Backend returned an empty atom-spec.", true);
+            return;
+        }
+
+        const geomSelect = document.getElementById("coordGeomSelect");
+        const geometryValue = geomSelect ? geomSelect.value : "Octahedral";
+        ensureIonCoordAssignmentsForGeometry(geometryValue);
+
+        let resolvedSpec = rawSpec;
+        let resolvedIndex = null;
+
+        // Allow future backend payloads like {"site_index": 1, "atom_spec": "/A:10@OD1"}.
+        if (rawSpec.startsWith("{") && rawSpec.endsWith("}")) {
+            try {
+                const parsed = JSON.parse(rawSpec);
+                if (parsed && parsed.atom_spec) {
+                    resolvedSpec = String(parsed.atom_spec);
+                }
+                if (parsed && Number.isFinite(Number(parsed.site_index))) {
+                    resolvedIndex = Number(parsed.site_index);
+                }
+            } catch (_err) {
+                // Keep using the raw atom spec string.
+            }
+        }
+
+        // Current backend path: infer target site from the "Assigning selected atom..." status text.
+        if (resolvedIndex === null) {
+            const statusText = (document.getElementById("addIonRunStatus")?.textContent || "").trim();
+            const m =
+                statusText.match(/Assigning selected atom to site\s+(\d+)/i) ||
+                statusText.match(/site\s+(\d+)/i);
+            if (m) {
+                resolvedIndex = Number(m[1]) - 1;
+            }
+        }
+
+        // Fallback: assign to first dummy/unassigned site if no explicit site can be inferred.
+        if (resolvedIndex === null) {
+            const firstDummyIdx = ionCoordAssignments.findIndex((site) => !site || !site.atom_spec);
+            if (firstDummyIdx >= 0) {
+                resolvedIndex = firstDummyIdx;
+            }
+        }
+
+        if (
+            !Number.isFinite(resolvedIndex) ||
+            resolvedIndex < 0 ||
+            resolvedIndex >= ionCoordAssignments.length
+        ) {
+            setAddIonStatus("Could not determine which coordination site to assign.", true);
+            return;
+        }
+
+        const compactSpec = resolvedSpec.replace(/^\/+/, "");
+        const shortLabel = compactSpec || resolvedSpec;
+        const fullLabel = compactSpec || resolvedSpec;
+
+        // This updates the 2D site and stores atom_spec in ionCoordAssignments for run payload retrieval.
+        setIonCoordSiteFromBackend(resolvedIndex, resolvedSpec, shortLabel, fullLabel);
+
+        // Persist a serialized mirror on the canvas as an additional retrievable store.
+        const ionCanvas = document.getElementById("ionGeometryCanvas");
+        if (ionCanvas) {
+            ionCanvas.dataset.coordAssignments = JSON.stringify(
+                ionCoordAssignments.map((site) => ({
+                    site_index: site.site_index,
+                    atom_spec: site.atom_spec,
+                    full_label: site.full_label
+                }))
+            );
+        }
+    }
+
+    function renderIonGeometrySketch() {
+        const ionSelect = document.getElementById("ionTypeSelect");
+        const geomSelect = document.getElementById("coordGeomSelect");
+        const container = document.getElementById("ionGeometryCanvas");
+
+        if (!ionSelect || !geomSelect || !container) return;
+
+        const ionName = ionSelect.value || "MG";
+        const geometryValue = geomSelect.value || "Octahedral";
+        const geometryLayout = resolveIonGeometryLayout(geometryValue);
+        const points = ION_GEOMETRY_LAYOUTS[geometryLayout] || [];
+        ensureIonCoordAssignmentsForGeometry(geometryValue);
+
+        const width = 420;
+        const height = 320;
+        const cx = width / 2;
+        const cy = height / 2 + 8;
+
+        container.innerHTML = "";
+        const svg = makeSvgNode("svg", {
+            viewBox: `0 0 ${width} ${height}`,
+            width: "100%",
+            height: "300",
+            role: "img",
+            "aria-label": `${geometryValue} geometry preview`
+        });
+
+        const titleText = makeSvgNode("text", {
+            x: width / 2,
+            y: 26,
+            "text-anchor": "middle",
+            "font-size": 14,
+            "font-weight": 600,
+            fill: "#2d455a"
+        });
+        titleText.textContent = geometryValue;
+        svg.appendChild(titleText);
+
+        const helperText = makeSvgNode("text", {
+            x: width / 2,
+            y: 44,
+            "text-anchor": "middle",
+            "font-size": 11,
+            fill: "#597086"
+        });
+        helperText.textContent = "Select one atom in ChimeraX, then click a site.";
+        svg.appendChild(helperText);
+
+        points.forEach((point) => {
+            const bond = makeSvgNode("line", {
+                x1: cx,
+                y1: cy,
+                x2: cx + point.x,
+                y2: cy + point.y,
+                stroke: point.axial ? "#6e879e" : "#8ba0b4",
+                "stroke-width": point.axial ? 2.6 : 1.9,
+                "stroke-dasharray": point.axial ? "5 4" : undefined,
+                "stroke-linecap": "round"
+            });
+            svg.appendChild(bond);
+        });
+
+        const center = makeSvgNode("circle", {
+            cx,
+            cy,
+            r: 30,
+            fill: "#004542",
+            stroke: "#003733",
+            "stroke-width": 2
+        });
+        svg.appendChild(center);
+
+        const centerLabel = makeSvgNode("text", {
+            x: cx,
+            y: cy + 5,
+            "text-anchor": "middle",
+            "font-size": 14,
+            "font-weight": 700,
+            fill: "#ffffff"
+        });
+        centerLabel.textContent = ionName;
+        svg.appendChild(centerLabel);
+
+        points.forEach((point, idx) => {
+            const px = cx + point.x;
+            const py = cy + point.y;
+            const assignment = ionCoordAssignments[idx] || {
+                atom_spec: null,
+                short_label: "dWat",
+                full_label: "dWat",
+                is_dummy: true
+            };
+
+            const siteGroup = makeSvgNode("g", {
+                cursor: "pointer"
+            });
+            siteGroup.addEventListener("click", () => requestIonCoordSiteAssignment(idx));
+
+            const atomCircle = makeSvgNode("circle", {
+                cx: px,
+                cy: py,
+                r: 16,
+                fill: assignment.is_dummy ? "#e6f3ff" : "#d8f7df",
+                stroke: assignment.is_dummy ? "#5c7a95" : "#2e7d48",
+                "stroke-width": assignment.is_dummy ? 1.8 : 2.2
+            });
+            siteGroup.appendChild(atomCircle);
+
+            const atomLabel = makeSvgNode("text", {
+                x: px,
+                y: py + 3,
+                "text-anchor": "middle",
+                "font-size": 8.8,
+                "font-weight": 600,
+                fill: "#2a4258"
+            });
+            atomLabel.textContent = assignment.short_label;
+            siteGroup.appendChild(atomLabel);
+
+            const tooltip = makeSvgNode("title", {});
+            tooltip.textContent = assignment.full_label || "dWat";
+            siteGroup.appendChild(tooltip);
+
+            svg.appendChild(siteGroup);
+        });
+
+        const nAssigned = ionCoordAssignments.filter((site) => !!site.atom_spec).length;
+        const footer = makeSvgNode("text", {
+            x: width / 2,
+            y: height - 10,
+            "text-anchor": "middle",
+            "font-size": 12,
+            fill: "#4f6477"
+        });
+        footer.textContent = `Coordination sites: ${points.length} | Assigned: ${nAssigned}`;
+        svg.appendChild(footer);
+
+        container.appendChild(svg);
+    }
+
+    function runAddIonFromUI() {
+        const ionSelect = document.getElementById("ionTypeSelect");
+        const geomSelect = document.getElementById("coordGeomSelect");
+
+        if (!ionSelect || !geomSelect) {
+            setAddIonStatus("Ion controls are not ready.", true);
+            return;
+        }
+
+        const coordinatingAtoms = getCurrentIonCoordAtoms(geomSelect.value);
+        const nAssigned = ionCoordAssignments.filter((site) => !!site.atom_spec).length;
+        const payload = {
+            ion_type: ionSelect.value,
+            coordination_geometry: geomSelect.value,
+            coordinating_atoms: coordinatingAtoms,
+            coordinating_atom_labels: ionCoordAssignments.map((site) => site.full_label)
+        };
+
+        // Stub command: wire this to your final backend command name when ready.
+        sendSiteValueToBackend("chemem:RunAddIon", payload);
+        setAddIonStatus(
+            `Sent ${payload.ion_type} in ${payload.coordination_geometry} mode with ${nAssigned}/${payload.coordinating_atoms.length} assigned atom-specs.`
+        );
+    }
+
+    function initAddIonsUI() {
+        const ionSelect = document.getElementById("ionTypeSelect");
+        const geomSelect = document.getElementById("coordGeomSelect");
+
+        if (!ionSelect || !geomSelect) return;
+
+        ionSelect.innerHTML = "";
+        geomSelect.innerHTML = "";
+
+        ION_TYPES.forEach((ion) => {
+            const option = document.createElement("option");
+            option.value = ion;
+            option.textContent = ion;
+            ionSelect.appendChild(option);
+        });
+
+        ION_GEOMETRIES.forEach((geometry) => {
+            const option = document.createElement("option");
+            option.value = geometry.value;
+            option.textContent = geometry.label;
+            geomSelect.appendChild(option);
+        });
+
+        ionSelect.addEventListener("change", renderIonGeometrySketch);
+        geomSelect.addEventListener("change", () => {
+            initIonCoordAssignmentsForGeometry(geomSelect.value);
+            renderIonGeometrySketch();
+            setAddIonStatus("Geometry changed. Select atoms and click sites to assign.");
+        });
+
+        initIonCoordAssignmentsForGeometry(geomSelect.value);
+        renderIonGeometrySketch();
+        setAddIonStatus("Select one atom in ChimeraX, then click a dWat site to assign it.");
+    }
+    
+    //-------ligand handling-------
+     let ligandIdCounter = 0;
+     
+     function addLigand() {
+         
+         ligandIdCounter++;
+         
+         // Collect the SMILES string from the input field
+         const smilesString = document.getElementById("ligandSmiles").value.trim();
+         if (!smilesString) {
+             alert("No SMILES string provided.");
+             return;
+         }
+         
+         const className = "SmilesParameter"; // Static for now, change as needed
+         const ligandData = {
+             id: ligandIdCounter,
+             value: smilesString,
+             class: className
+         };
+         
+         sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData)
+         document.getElementById("ligandSmiles").value = '';
+         addLigandToList(ligandData);
+     }
+     
+     function addLigandFile() {
+         ligandIdCounter++;
+     
+         // Collect the file path from the span, not an input field
+         const ligandFilePath = document.getElementById("ligandFilePath").textContent.trim();
+         if (!ligandFilePath) {
+             alert("No ligand file provided.");
+             return;
+         }
+     
+         const className = "PathParameter"; 
+         const ligandData = {
+             id: ligandIdCounter,
+             value: ligandFilePath,
+             class: className
+         };
+     
+         // Send the JSON object to the backend for the file handling
+         sendSiteValueToBackend("chemem:AddLigandFile", ligandData);
+         
+         // Optionally clear the displayed file path
+         document.getElementById("ligandFilePath").textContent = '';
+     
+         // Update the ligand list on the UI
+         addLigandToList(ligandData);
+     }
+     
+     function addLigandToList(ligandData) {
+         const ligandList = document.getElementById('ligandList');
+     
+         // Create the list item
+         const li = document.createElement('li');
+         li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
+         li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
+         
+         // Create the remove button
+         const removeBtn = document.createElement('button');
+         removeBtn.textContent = 'Remove';
+         removeBtn.onclick = function() { removeLigand(ligandData.id); };  // Placeholder function for now
+     
+         // Append the button to the list item
+         li.appendChild(removeBtn);
+     
+         // Append the list item to the ligand list
+         ligandList.appendChild(li);
+     }
+
+     
+     function removeLigand(ligandId) {
+         const ligandItem = document.getElementById(`ligand-${ligandId}`);
+         if (ligandItem) {
+             ligandItem.parentNode.removeChild(ligandItem);
+         }
+         sendSiteValueToBackend("chemem:RemoveLigand", ligandId);
+    }
+         
+    //------ligand tab----
+    function ProtonateLigand() {
+        
+        var phmax = document.getElementById("pHMax").value; 
+        var phmin = document.getElementById("pHMin").value; 
+        var phstd = document.getElementById("pHSTD").value;
+        
+        if (!phmax) {
+            phmax = 8.4;
+        }
+        if (!phmin) {
+            phmin = 6.4;
+        }
+        if (!phstd) {
+            phstd = 1.0;
+        }
+        
+        
+        const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string provided.");
+            return;
+        }
+        
+        var siteValue = `${phmax} | ${phmin} | ${phstd}`;
+        sendParameterToBackend("chemem:ProtonateSmiles", smilesString, siteValue, "ProtonationParameter");
+        document.getElementById("ligandSmilesForProtonation").value = '';
+    }
+    
+    function removeAllProtonatedSmiles() {
+        // Get the unordered list element by its ID
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Remove all child <li> elements
+        while (list.firstChild) {
+            list.removeChild(list.firstChild);
+        }
+        sendSiteValueToBackend("chemem:CleanProtonationImage", "None");
+    }
+    
+
+    function addSmilesToProtonationList(smiles) {
+        if (!smiles) {
+            alert("No SMILES string provided.");
+            return;
+        }
+    
+        // Find the unordered list where the SMILES will be added
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Create a new list item
+        const listItem = document.createElement('li');
+    
+        // Add the SMILES string as text content of the list item
+        listItem.textContent = smiles;
+        
+        
+        
+         
+         const addButton = document.createElement("button");
+         addButton.className = "icon-button"; // Add a class for styling
+         addButton.onclick = function() {
+             
+             ligandIdCounter++;
+             const className = "SmilesParameter"; // Static for now, change as needed
+             const ligandData = {
+                 id: ligandIdCounter,
+                 value: smiles,
+                 class: className
+             };
+             sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData);
+             addLigandToList(ligandData);
+             
+         };
+         
+         const addIcon =  document.createElement("img");
+         addIcon.src = "img/add.png"; 
+         addIcon.alt = "Add";
+         addIcon.className = "icon";
+         addButton.appendChild(addIcon)
+        
+    
+        // Create the View button
+        const viewButton = document.createElement("button");
+        addButton.className = "icon-button"; 
+        viewButton.onclick = function() {
+            
+            sendSiteValueToBackend("chemem:ShowLigandSmilesImage", smiles);
+        };
+        const viewIcon =  document.createElement("img");
+        viewIcon.src = "img/view.png";
+        viewIcon.alt = "View";
+        viewIcon.className = "icon";
+        viewButton.appendChild(viewIcon);
+        
+        
+        // Append the buttons to the list item
+        listItem.appendChild(addButton);
+        listItem.appendChild(viewButton);
+    
+        // Append the list item to the unordered list
+        list.appendChild(listItem);
+    }
+    
+    function displayChemicalStructure(imagePath) {
+        // Get the container where the image should be displayed
+        const container = document.querySelector("#chemical-structure fieldset");
+        
+        // Check if an image already exists
+        let img = container.querySelector("img");
+        
+        if (!img) {
+            // Create a new img element if it does not exist
+            img = document.createElement("img");
+            container.appendChild(img);
+        }
+    
+        // Set the image source to the provided path
+        img.src = imagePath;
+        img.alt = "Chemical Structure";
+        // Inline styles removed since CSS will handle the image sizing and centering
+    }
+    
+    //-----binding site tab-----
+    
+    function activateMarkerPlacement() {
+
+            sendSiteValueToBackend("chemem:BindingSiteFromMarker", "None");
+            
+    }
+    
+    //function to add binding site to binding site tab
+    function addBindingSiteEntry(siteValue, dataKey) {
+        
+        const bindingSiteList = document.getElementById("manualBindingSitesList");
+        
+        
+        // Create the list item
+        const li = document.createElement("li");
+        li.textContent = siteValue;
+        li.setAttribute('data-key', dataKey); // Set the data-key attribute
+        
+        
+        // Create the Load button
+        const loadButton = document.createElement("button");
+        loadButton.className = "icon-button"; // Add a class for styling
+        loadButton.onclick = function() {
+            sendSiteValueToBackend("chemem:RenderBindingSiteFromClick", dataKey)
+            // Add logic to load binding site details here
+        };
+        
+        // Create the image element for the Load button
+        const loadIcon = document.createElement("img");
+        loadIcon.src = "img/view.png";
+        loadIcon.alt = "Load";
+        loadIcon.className = "icon"; // Add a class for styling
+        loadButton.appendChild(loadIcon);
+        
+        
+        // transfer to conf 1 here
+        const addButton = document.createElement("button");
+        addButton.className = "icon-button"; // Add a class for styling
+        addButton.onclick = function() {
+            
+            sendSiteValueToBackend("chemem:TransferSiteToConf", dataKey)
+            // Add additional functionality here
+        };
+        
+        const addIcon =  document.createElement("img");
+        addIcon.src = "img/add.png"; 
+        addIcon.alt = "+";
+        addIcon.className = "icon";
+        addButton.appendChild(addIcon)
+        
+        // Create the Delete button
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "icon-button delete-button-click"; // Add a class for styling
+        deleteButton.onclick = function() {
+            bindingSiteList.removeChild(li);
+            removeBindingSite(dataKey); // Ensure this function is implemented to handle backend removal
+        };
+        
+        // Create the image element for the Delete button
+        const deleteIcon = document.createElement("img");
+        deleteIcon.src = "img/trash.png"; // Update this path as needed
+        deleteIcon.alt = "Delete";
+        deleteIcon.className = "icon"; // Add a class for styling
+        
+        // Append the image to the Delete button
+        deleteButton.appendChild(deleteIcon);
+        
+        // Create the Mask button
+        const maskButton = document.createElement("button");
+        maskButton.className = "icon-button";
+        maskButton.onclick = function() {
+            setEditBindingSite(siteValue);
+            sendSiteValueToBackend("chemem:SetEditBindingSiteValue", dataKey);
+            openTab(event, "MaskTab");
+        }
+        const maskIcon = document.createElement("img");
+        maskIcon.src = "img/mask.png"; 
+        maskIcon.alt = "Mask";
+        maskIcon.className = "icon";
+        maskButton.appendChild(maskIcon);
+        
+        
+        
+        // Append buttons to the list item
+        li.appendChild(loadButton);
+        li.appendChild(addButton);
+        li.appendChild(deleteButton);
+        li.appendChild(maskButton);
+        
+        // Append the list item to the binding site list
+        bindingSiteList.appendChild(li);
+        
+    }
+    
+    function removeBindingSite(key) {
+        sendSiteValueToBackend("chemem:RemoveBindingSite", key);
+    }
+    
+    function setEditBindingSite(value) {
+        //document.getElementById('bindingSiteInput').value = value;
+        alert("Here");
+    }
+    
+    function populateFieldsFromBackendString(dataString) {
+        // Use a regular expression to extract the centroid and box size values
+        const centroidMatch = dataString.match(/Centroid: \(([^,]+), ([^,]+), ([^\)]+)\)/);
+        const boxSizeMatch = dataString.match(/Box Size: \(([^,]+), ([^,]+), ([^\)]+)\)/);
+        
+        
+        
+        if (centroidMatch && boxSizeMatch) {
+            // Extract the centroid values
+            const centroidX = parseFloat(centroidMatch[1]);
+            const centroidY = parseFloat(centroidMatch[2]);
+            const centroidZ = parseFloat(centroidMatch[3]);
+    
+            // Extract the box size values
+            const boxSizeX = parseFloat(boxSizeMatch[1]);
+            const boxSizeY = parseFloat(boxSizeMatch[2]);
+            const boxSizeZ = parseFloat(boxSizeMatch[3]);
+    
+            // Populate the input fields
+            document.getElementById("manualCentroidX").value = centroidX;
+            document.getElementById("manualCentroidY").value = centroidY;
+            document.getElementById("manualCentroidZ").value = centroidZ;
+            document.getElementById("manualboxSizeX").value = boxSizeX;
+            document.getElementById("manualboxSizeY").value = boxSizeY;
+            document.getElementById("manualboxSizeZ").value = boxSizeZ;
+        } else {
+            console.error("Invalid data string format");
+        }
+    }
+    
+    function autoSiteFinder() {
+        sendSiteValueToBackend("chemem:AutoSiteFinder", "None")
+    }
+    
+    //-----mask tab 
+    function runAutoMask() {
+        
+        
+       //TODO!! Grab options
+        //remove this variable its not needed 
+        var siteValue = document.getElementById("protocolDropdown").value;
+        
+        sendParameterToBackend("chemem:RunAutoMask", "MaskOptions", siteValue, "MaskOptionsParameter");
+    }
+    
+    //-----dock tab 
+    function runDocking() {
+        sendParameterToBackend("chemem:AddDockParameter", "dock", "protocol", "StringParameter");
+        
+        var clusterDocking = document.getElementById("dockClusterCutoff").value;
+        var energyDocking = document.getElementById("energyClusterCutoff").value;
+        
+        
+        
+        if (clusterDocking === "" || isNaN(clusterDocking)) {
+            //pass
+        } else {
+             sendParameterToBackend("chemem:AddDockParameter", "cluster-docking", clusterDocking, "FloatParameter");
+             
+        }
+        
+        if (energyDocking === "" || isNaN(energyDocking)) {
+            //pass
+        } else {
+             sendParameterToBackend("chemem:AddDockParameter", "energy-cutoff", energyDocking, "FloatParameter");
+             
+        }
+        
+        const cb = document.getElementById('minimiseDock');
+        if (cb && cb.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "minimize-docking", "protocol", "StringParameter");
+        }
+        
+        const rs = document.getElementById("mmgbsaRescoreDock");
+        if (rs && rs.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "rescore", "protocol", "StringParameter");
+        }
+        
+        const fr = document.getElementById("flexRingsDock");
+        if (fr && fr.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "flexible-rings", "protocol", "StringParameter");
+        }
+        
+        const wd = document.getElementById("waterIncDock");
+        if (wd && wd.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "water-refine", "protocol", "StringParameter");
+        }
+        
+        const dmp = document.getElementById('dockMapProtocol').value;
+        
+        if (dmp === 'alpha-mask') {
+            sendParameterToBackend("chemem:AddDockParameter", "dock-setup", "alpha", "StringParameter");
+            
+        } else if (dmp === 'significant-features') {
+            sendParameterToBackend("chemem:AddDockParameter", "dock-setup", "sf", "StringParameter");
+          
+        }
+        
+        //------Advanced options 
+        const inBr = document.getElementById("biasRadius");
+        const br = inBr.valueAsNumber; 
+        if (Number.isFinite(br)) {
+            sendParameterToBackend("chemem:AddDockParameter", "bias-radius", br, "FloatParameter");
+        }
+        
+        const inSw = document.getElementById("sciWeight");
+        const sw = inSw.valueAsNumber; 
+        if (Number.isFinite(sw)) {
+            sendParameterToBackend("chemem:AddDockParameter", "sci-weight", sw, "FloatParameter");
+            
+        }
+        
+         const inGn = document.getElementById("globalSearchDock");
+         const gn = inGn.valueAsNumber; 
+         if (Number.isFinite(gn)) {
+             sendParameterToBackend("chemem:AddDockParameter", "n-global-search", gn, "IntParameter");
+             
+         }
+        
+        const inLn = document.getElementById("localSearchDock");
+        const ln = inLn.valueAsNumber; 
+        if (Number.isFinite(ln)) {
+            sendParameterToBackend("chemem:AddDockParameter", "n-local-search", ln, "IntParameter");
+            
+        }
+        
+        const nop = document.getElementById("noParaDock");
+        if (nop && nop.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "no-para", "protocol", "StringParameter");
+        }
+        
+        
+        const ss = document.getElementById("splitSitesDock");
+        if (ss && ss.checked) {
+            sendParameterToBackend("chemem:AddDockParameter", "split-site", "protocol", "StringParameter");
+        }
+        
+        
+        sendSiteValueToBackend("chemem:RunDocking", "None");
+        
+        
+    }
+    
+    
+    function addJob(jobData) {
+        
+        
+        const { id, status } = jobData;
+        const jobId = id;
+        const jobList = document.getElementById("jobList");
+        if (!jobList) {
+            alert("Failed to find the job list element.");
+            return; 
+        }
+        
+        // Create a new list item to represent the job
+        const li = document.createElement("li");
+        li.className = 'job-item';
+        li.id = `job-${jobId}`;
+        
+        // Create a status indicator element
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = 'status-indicator';
+        
+        // Add initial status class
+        statusIndicator.classList.add(status.toLowerCase());
+        
+        // Create a job info span to show job ID, status, and command
+        const jobInfo = document.createElement('span');
+        jobInfo.textContent = `Job ID: ${jobId}, Status: ${status}`;
+        
+        // Create a button to load job details (you can implement the action)
+        const loadBtn = document.createElement("button");
+        loadBtn.className = 'load-btn';
+        loadBtn.textContent = "Load";
+        loadBtn.onclick = function (event) {
+            sendSiteValueToBackend("chemem:LoadDockJob", jobId); 
+            
+    
+        };
+        
+    
+        // Create a button to cancel the job (implement the backend job cancellation logic)
+        const removeBtn = document.createElement("button");
+        removeBtn.className = 'cancel-btn';
+        removeBtn.textContent = "Cancel";
+        removeBtn.onclick = function () {
+            removeJob(jobId);
+        };
+        
+        // Append elements to the job item
+        li.appendChild(statusIndicator);
+        li.appendChild(jobInfo);
+        li.appendChild(loadBtn);
+        li.appendChild(removeBtn);
+        
+        // Add the job item to the job list
+        jobList.appendChild(li);
+        updateJobStatus(jobId, "Running");
+        
+    }
+    
+    // Function to remove a job item from the UI
+    function removeJob(jobId) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            jobItem.parentNode.removeChild(jobItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveJob", jobId)
+    }
+
+
+    function updateJobStatus(jobId, newStatus) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            const statusIndicator = jobItem.querySelector('.status-indicator');
+            const jobInfo = jobItem.querySelector('span');
+    
+            // Update the class for the status indicator
+            statusIndicator.className = 'status-indicator';  // Reset class
+            statusIndicator.classList.add(newStatus.toLowerCase());  // Add new status class
+    
+            // Update the job info text content
+            jobInfo.textContent = `Job ID: ${jobId}, Status: ${newStatus}`;
+        }
+    }
+    
+    // Renders the two-layer list: directories -> solutions
+    function renderDockResults(data) {
+      // Expected shape:
+      // {
+      //   directories: ["binding-site-1", "binding-site-2", ...],
+      //   results: [
+      //     [ {full_path, display_name, score}, ... ],   // for binding-site-1
+      //     [ {full_path, display_name, score}, ... ],   // for binding-site-2
+      //     ...
+      //   ]
+      // }
+    
+      const root = document.getElementById('dockResults');
+      if (!root) return;
+    
+      root.innerHTML = ''; // clear existing
+      
+    
+      if (!data || !Array.isArray(data.directories) || !Array.isArray(data.results)) {
+        root.textContent = 'No results found.';
+        return;
+      }
+    
+      data.directories.forEach((dirName, idx) => {
+        const solutions = data.results[idx] || [];
+    
+        const details = document.createElement('details');
+        details.className = 'folder';
+        details.open = false; // start collapsed
+    
+        const summary = document.createElement('summary');
+        summary.className = 'dir-header';
+        summary.textContent = `${dirName} (${solutions.length})`;
+        details.appendChild(summary);
+    
+        const list = document.createElement('div');
+    
+        solutions.forEach(sol => {
+          const row = document.createElement('div');
+          row.className = 'result-row';
+    
+          const name = document.createElement('div');
+          name.className = 'result-name';
+          const scoreStr = (sol.score !== undefined && sol.score !== null) ? `  [score: ${sol.score}]` : '';
+          name.textContent = `${sol.display_name}${scoreStr}`;
+          row.appendChild(name);
+          
+          
+          
+          
+          
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "icon-button";
+        
+          // icon element
+          const viewIcon = document.createElement("img");
+          viewIcon.src = "img/view.png";
+          viewIcon.alt = "View";
+          viewIcon.className = "icon";
+          viewBtn.appendChild(viewIcon);
+         
+          // initial state
+          viewBtn.dataset.state = "hidden"; // "hidden" -> will View; "visible" -> will Hide
+        
+          viewBtn.addEventListener("click", () => {
+              const isHidden = viewBtn.dataset.state === "hidden";
+        
+              if (isHidden) {
+                  // Show solution
+                  sendParameterToBackend("chemem:ViewDockSolution", "ViewSolution", sol.full_path, "PathParameter");
+                  viewBtn.dataset.state = "visible";
+                  viewIcon.src = "img/hide.png";
+                  viewIcon.alt = "Hide";
+                  viewBtn.title = "Hide";
+              } else {
+                  // Hide solution
+                  sendParameterToBackend("chemem:HideDockSolution", "HideSolution", sol.full_path, "PathParameter");
+                  viewBtn.dataset.state = "hidden";
+                  viewIcon.src = "img/view.png";
+                  viewIcon.alt = "View";
+                  viewBtn.title = "View";
+          }
+        });
+        
+        row.appendChild(viewBtn);
+
+          
+          /*
+          const viewBtn = document.createElement("button");
+          viewBtn.className = "icon-button";
+          viewBtn.onclick = function(){
+          
+              sendParameterToBackend("chemem:ViewDockSolution", "ViewSolution", sol.full_path, "PathParameter");
+              
+          }
+
+          const viewIcon = document.createElement("img"); 
+          viewIcon.src = "img/view.png"; 
+          viewIcon.alt = "View";
+          viewIcon.className = "icon";
+          viewBtn.appendChild(viewIcon);
+          row.appendChild(viewBtn);
+          
+          */
+          
+          
+          
+          const addBtn = document.createElement("button");
+          addBtn.className = "icon-button";
+          addBtn.onclick = function() {
+              sendParameterToBackend("chemem:AddDockSolutionToStructure", "AddSolution", sol.full_path, "PathParameter");;
+          }
+
+          const addIcon = document.createElement("img");
+          addIcon.src = "img/add.png";
+          addIcon.alt = "Add";
+          addIcon.className = "icon";
+          addBtn.appendChild(addIcon);
+          row.appendChild(addBtn);
+          
+          
+          /*
+          const removeBtn = document.createElement("button");
+          removeBtn.className = "icon-button";
+          removeBtn.onclick = function(){
+              alert("remove button click");
+          
+          }
+          
+          
+          const removeIcon = document.createElement("img");
+          removeIcon.src = "img/trash.png";
+          removeIcon.alt = "Remove";
+          removeIcon.className = "icon";
+          removeBtn.appendChild(removeIcon);
+          row.appendChild(removeBtn);
+          
+          */
+          
+          list.appendChild(row);
+        });
+    
+        details.appendChild(list);
+        root.appendChild(details);
+      });
+    }
+    
+    
+    //-----build tab 
+     function buildSimulation() {
+         
+         
+         const simselatoms = document.getElementById("simulateSelectedAtoms");
+         if (simselatoms && simselatoms.checked) {
+             sendParameterToBackend("chemem:AddSimulationParameter", "simulateSelectedAtoms", 1, "IntParameter");
+         } else {   
+              sendParameterToBackend("chemem:AddSimulationParameter", "simulateSelectedAtoms", 0, "IntParameter");
+         }
+         
+         const mapBiasInput = document.getElementById("mapBias");
+         const mapBias = mapBiasInput.valueAsNumber;
+        if (Number.isFinite(mapBias)) {
+            sendParameterToBackend(
+                "chemem:AddSimulationParameter",
+                "mapBias",
+                mapBias,
+                "FloatParameter"
+            );
+        }
+        
+        const tempInput = document.getElementById("startTemperatureInput");
+        const temperature = tempInput.valueAsNumber;
+        
+        if (Number.isFinite(temperature)) {
+            sendParameterToBackend(
+                "chemem:AddSimulationParameter",
+                "temperature",
+                temperature,
+                "FloatParameter"
+            );
+        }
+        
+        const solventSelect = document.getElementById("avalibleSolventModels");
+        const implicitSolvent = solventSelect.value;
+        if (implicitSolvent) {
+            sendParameterToBackend(
+                "chemem:AddSimulationParameter",
+                "implicitSolvent",
+                implicitSolvent,
+                "StringParameter"
+            );
+        }
+        
+        sendConstraintCheckbox("constrainProtein", "constrainProtein");
+        sendConstraintCheckbox("constrainProteinBackbone", "constrainProteinBackbone");
+        sendConstraintCheckbox("constrainProteinSidechain", "constrainProteinSidechain");
+        sendConstraintCheckbox("constrainLigandAtoms", "constrainLigandAtoms");
+        sendConstraintCheckbox("constrainSSE", "constrainSSE");
+        sendConstraintCheckbox("constrainHelices", "constrainHelices");
+        sendConstraintCheckbox("constrainSheets", "constrainSheets");
+        
+        
+        sendSiteValueToBackend("chemem:BuildSimulation", "None");
+     }
+     
+     
+     
+     function sendConstraintCheckbox(id, paramName) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        sendParameterToBackend(
+            "chemem:AddSimulationConstraintParameter",
+            paramName,
+            el.checked ? 1 : 0,
+            "IntParameter"
+        );
+        el.checked = false;
+    }
+     
+     
+     function addLigandToSmiulation() {
+         
+         ligandIdCounter++;
+         
+         // Collect the SMILES string from the input field
+         const smilesString = document.getElementById("ligandSimulationSmiles").value.trim();
+         if (!smilesString) {
+             alert("No SMILES string provided.");
+             return;
+         }
+         
+         const className = "SmilesParameter"; // Static for now, change as needed
+         const ligandData = {
+             id: ligandIdCounter,
+             value: smilesString,
+             class: className
+         };
+         
+         sendSiteValueToBackend("chemem:AddSimulationLigandSmiles", ligandData)
+         document.getElementById("ligandSmiles").value = '';
+         addLigandToSimulationList(ligandData);
+     }
+    
+    function addLigandToSimulationList(ligandData) {
+        const ligandList = document.getElementById('ligandSimulationList');
+    
+        // Create the list item
+        const li = document.createElement('li');
+        li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
+        li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
+        
+        // Create the remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = function() { removeLigand(ligandData.id); };  // Placeholder function for now
+    
+        // Append the button to the list item
+        li.appendChild(removeBtn);
+    
+        // Append the list item to the ligand list
+        ligandList.appendChild(li);
+    }
+    
+    function removeSimulationLigand(ligandId) {
+        const ligandItem = document.getElementById(`ligand-${ligandId}`);
+        if (ligandItem) {
+            ligandItem.parentNode.removeChild(ligandItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveSimulationLigand", ligandId);
+    }
+    
+    function addLigandFileToSimulation() {
+        ligandIdCounter++;
+    
+        // Collect the file path from the span, not an input field
+        const ligandFilePath = document.getElementById("ligandSimulationFilePath").textContent.trim();
+        if (!ligandFilePath) {
+            alert("No ligand file provided.");
+            return;
+        }
+    
+        const className = "PathParameter"; 
+        const ligandData = {
+            id: ligandIdCounter,
+            value: ligandFilePath,
+            class: className
+        };
+    
+        // Send the JSON object to the backend for the file handling
+        sendSiteValueToBackend("chemem:AddLigandFileToSimulation", ligandData);
+        
+        // Optionally clear the displayed file path
+        document.getElementById("ligandSimulationFilePath").textContent = '';
+    
+        // Update the ligand list on the UI
+        addLigandToSimulationList(ligandData);
+    }
+    
+    
+    
+    //-------simulation tab 
+    function runSimulation() {
+        sendSiteValueToBackend("chemem:RunSimulation", "None");
+    }
+    
+    function pauseSimulation() {
+        sendSiteValueToBackend("chemem:PauseSimulation", "None");
+    }
+    
+    
+    function stopSimulation() {
+        showRunHidePause();
+        sendSiteValueToBackend("chemem:StopSimulation", "None");
+    }
+    
+    
+    function showRunHidePause() {
+        document.getElementById("RunSimulationButton").style.display = "";
+        document.getElementById("PauseSimulationButton").style.display = "none";
+    }
+    
+    function showPauseHideRun() {
+        document.getElementById("RunSimulationButton").style.display = "none";
+        document.getElementById("PauseSimulationButton").style.display = "";
+    }
+    
+    function handleRunClick() {
+        runSimulation();
+        showPauseHideRun();
+    }
+    
+    function handlePauseClick() {
+        pauseSimulation();
+        showRunHidePause();
+    }
+
+    
+    
+    function addRestraintToList(content, id, restrain_type) {
+        // Get the UL element by its ID
+        var ul = document.getElementById("activeRestraints");
+    
+        // Create a new list item
+        var li = document.createElement("li");
+    
+        // Set the ID for the LI
+        li.setAttribute("data-id", id); // Using data-id to associate the ID value
+    
+        // Add text content to the list item
+        li.textContent = content;
+    
+        // Create a delete button
+        var deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+    
+        // Function to handle the different delete actions
+        function getDeleteFunctionByType(id, restrain_type) {
+            switch(restrain_type) {
+                case 'HbondTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteHbondTug", id);
+                    };
+                
+                case 'WeakHbondTug':
+                    return function () {
+                        sendSiteValueToBackend("chemem:DeleteWeakHbondTug", id);
+                    };
+                case 'PiPiTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeletePiPiTug", id);
+                    };
+            
+                case 'HalogenBondTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteHalogenBondTug", id);
+                    };
+                
+                case 'CationPiTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteCationPiTug", id);
+                    };
+                
+                case 'SaltBridgeTug':
+                return function() {
+                    sendSiteValueToBackend("chemem:DeleteSaltBridgeTug", id);
+                };
+                
+                case 'ConstrainProtein':
+                return function() {
+                    sendSiteValueToBackend("chemem:DeleteConstrainProtein", id);
+                };
+                
+                case 'ConstrainBackBone':
+                return function () {
+                    sendSiteValueToBackend("chemem:DeleteConstrainBackBone", id);
+                };
+                
+                case 'ConstrainSidechain':
+                return function () {
+                    sendSiteValueToBackend("chemem:DeleteConstrainSidechain", id);
+                };
+                
+                case 'ConstrainLigands':
+                return function () {
+                    sendSiteValueToBackend("chemem:DeleteLigandConstraint", id);
+                };
+                 
+                default:
+                    return function() {
+                        console.error("Unknown restraint type: " + restrain_type);
+                    };
+            }
+        }
+    
+        // Assign the appropriate delete action based on the restraint type
+        var deleteAction = getDeleteFunctionByType(id, restrain_type);
+    
+        // Add an event listener to the delete button for removing the LI and handling backend call
+        deleteButton.addEventListener("click", function() {
+            ul.removeChild(li);
+            deleteAction();  // Call the appropriate delete function
+        });
+    
+        // Append the delete button to the list item
+        li.appendChild(deleteButton);
+    
+        // Append the list item to the unordered list
+        ul.appendChild(li);
+    }
+    
+    
+    function sendTemperatureToBackend(temp) {
+      sendParameterToBackend("chemem:SetSimulationTempreture", "simulation_temp", temp, "IntParameter");
+    }
+    
+    function sendMapBiasToBackend(bias) {
+      sendParameterToBackend("chemem:SetSimulationMapBias", "map_bias", bias, "IntParameter");
+    }
+    
+    // Guard against double-fires & bad input
+    function commitTemperature(el) {
+      if (!el || el.value === "") return;
+    
+      const temp = parseInt(el.value, 10);
+      if (Number.isNaN(temp)) return;
+    
+      if (el.dataset.lastSent === String(temp)) return;
+      el.dataset.lastSent = String(temp);
+    
+      sendTemperatureToBackend(temp);
+    }
+    
+    function commitMapBias(el) {
+      if (!el || el.value === "") return;
+    
+      // If you truly want an int, use parseInt here instead
+      const bias = parseFloat(el.value);
+      if (Number.isNaN(bias)) return;
+    
+      if (el.dataset.lastSent === String(bias)) return;
+      el.dataset.lastSent = String(bias);
+    
+      sendMapBiasToBackend(bias);
+    }
+
+    
+    
+    //-----on dom
+    document.addEventListener('DOMContentLoaded', () => {
+      const select = document.getElementById('avaliblePlatforms');
+    
+      // change handler
+      select.addEventListener('change', (e) => {
+        setPlatform(e.target.value);   // your existing function
+      });
+      
+      
+      sendSiteValueToBackend("chemem:UpdateExes", "None");
+      
+      const selectElementExe = document.getElementById('chememExes');
+      selectElementExe.addEventListener('change', function() {
+          sendParameterToBackend("chemem:SetCurrentExe", this.value, this.value, "PathParameter");
+      });
+      
+      sendSiteValueToBackend("chemem:UpdateModels", "None");
+      
+      // update current model on selection
+      const selectElementModels = document.getElementById('models');
+      selectElementModels.addEventListener('change', function() {
+          sendParameterToBackend("chemem:SetCurrentModel", this.value, this.value, "ModelParameter");
+      });
+      
+      sendSiteValueToBackend("chemem:UpdateMaps", "None");
+      
+      const selecetElementMaps = document.getElementById('maps');
+      selecetElementMaps.addEventListener('change', function() {
+           sendParameterToBackend("chemem:SetCurrentMap", this.value, this.value, "MapParameter");
+      });
+      
+      
+      const inputElementresolution = document.getElementById('resolution');
+      inputElementresolution.addEventListener('input', debounce(function() {   
+          sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+          
+      },500));
+
+      initAddIonsUI();
+      
+      
+    });
+    
+    
+
+    
+    </script>
+
+</body>
+             
+                     
+                     
+          

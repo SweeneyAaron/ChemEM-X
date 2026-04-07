@@ -1,0 +1,3740 @@
+<!-- 
+This file is part of the ChemEM-X software.
+
+Copyright (c) 2024 - Aaron Sweeney
+
+This module was developed by:
+  Aaron Sweeney    <aaron.sweeney AT cssb-hamburg.de>
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChemEM</title>
+    <link rel="stylesheet" type="text/css" href="/chimerax/ui/html/css/bootstrap-3.3.7.css">
+    <style>
+        body {
+            line-height: 1.6;
+            background-color: #e7eef2;
+            font-family: 'Segoe UI', sans-serif;
+            padding: 20px;
+            color: #424242;
+        }
+
+        h1 {
+            text-align: center;
+            color: #5c6bc0;
+            margin-bottom: 40px;
+            font-size: 2.5em;
+        }
+
+        legend {
+            color: #004542;
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .container {
+            background: white;
+            border: 1px solid #c5cae9;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+            margin-bottom: 25px;
+        }
+
+        label {
+            color: #424242;
+            margin-bottom: 8px;
+            font-weight: bold;
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        select, input[type="checkbox"], input[type="number"], input[type="text"], input[type="file"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+        }
+
+        .checkbox-label {
+            display: block;
+            position: relative;
+            padding-left: 35px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            font-size: 0.95em;
+            user-select: none;
+        }
+
+        .checkbox-label input {
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            height: 0;
+            width: 0;
+        }
+
+        .checkmark {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 25px;
+            width: 25px;
+            background-color: #eee;
+            border-radius: 4px;
+        }
+
+        .checkbox-label:hover input ~ .checkmark {
+            background-color: #ccc;
+        }
+
+        .checkbox-label input:checked ~ .checkmark {
+            background-color: #9DB5B2;
+        }
+
+        .checkmark:after {
+            content: "";
+            position: absolute;
+            display: none;
+        }
+
+        .checkbox-label input:checked ~ .checkmark:after {
+            display: block;
+        }
+
+        .checkbox-label .checkmark:after {
+            left: 9px;
+            top: 5px;
+            width: 7px;
+            height: 15px;
+            border: solid white;
+            border-width: 0 3px 3px 0;
+            -webkit-transform: rotate(45deg);
+            -ms-transform: rotate(45deg);
+            transform: rotate(45deg);
+        }
+
+        .buttons {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        button, .submit {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #004542;
+            color: white;
+            font-size: 1em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover, .submit:hover {
+            background-color: #9DB5B2;
+        }
+
+        button[type="reset"] {
+            background-color: #ef5350;
+        }
+
+        button[type="reset"]:hover {
+            background-color: #d32f2f;
+        }
+
+        /* Flexbox layout for input and button */
+        .input-with-button {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .input-with-button label,
+        .input-with-button input[type="text"],
+        .input-with-button input[type="file"] {
+            flex: 1; /* Allows input and label to take up available space */
+            margin-right: 10px; /* Space between label/input and button */
+        }
+
+        .input-with-button input[type="text"],
+        .input-with-button input[type="file"] {
+            max-width: calc(100% - 120px); /* Adjust based on your layout */
+        }
+
+        .file-input-group {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .file-input-group label,
+        .file-input-group input[type="file"] {
+            flex: 1;
+            margin-right: 10px;
+        }
+
+        .add-button {
+            padding: 8px 15px;
+            background-color: #004542;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: 10px;
+        }
+
+        .add-button:hover {
+            background-color: #9DB5B2;
+        }
+        
+        .collapse {
+            display: none;
+        }
+
+        /* Style for the toggle arrow */
+        .toggle-arrow {
+            cursor: pointer;
+            font-size: 1em;
+            user-select: none;
+        }
+        
+        #SigFeatBindingSiteList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        #SigFeatBindingSiteList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        #SigFeatBindingSiteList li:hover {
+            background-color: #e9eef7;
+        }
+        
+        #ligandList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+
+        #ligandList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #ligandList li:hover {
+            background-color: #e9eef7;
+        }
+
+        /* Style for the trash icon */
+        .trash-icon {
+            cursor: pointer;
+            width: 20px; /* Adjust size as needed */
+            height: 20px; /* Adjust size as needed */
+            visibility: hidden; /* Hidden by default */
+        }
+
+        #ligandList li:hover .trash-icon {
+            visibility: visible; /* Only visible on hover */
+        }
+        
+        .centroid-input-group {
+            display: flex;
+            align-items: center;
+        }
+
+        .centroid-input-group label {
+            margin-right: 10px;
+        }
+
+        .centroid-input-group input[type="number"] {
+            width: 90px; /* Adjust width as needed */
+            margin-right: 10px;
+        }
+
+        
+
+        /* Styles for the centroid list */
+        #centroidList {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+
+        #centroidList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        #centroidList li:hover {
+            background-color: #e9eef7;
+        }
+
+        #centroidList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        /* Styles for tabs */
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #9DB5B2;
+        }
+
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }
+
+        .tab button:hover {
+            background-color: #001b1a;
+        }
+
+        .tab button.active {
+            background-color: #004542;
+        }
+
+        .tabcontent {
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+        
+        #manualBindingSitesList, #protonatedSmilesList , #preprocMapsList, #postprocMapsList, #fittingMapsList , #activeRestraints {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        #manualBindingSitesList li, #protonatedSmilesList li, #preprocMapsList li, #postprocMapsList li, #fittingMapsList li, #activeRestraints li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        #manualBindingSitesList li:hover, #protonatedSmilesList li:hover, #preprocMapsList li:hover, #postprocMapsList li:hover, #fittingMapsList li:hover, #activeRestraints li:hover {
+            background-color: #e9eef7;
+        }
+        
+        #manualBindingSitesList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        #manualBindingSitesList { 
+            list-style-type: none;
+            padding: 8px;
+            max-height: 100px;
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        #manualBindingSitesList li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        #manualBindingSitesList li:hover {
+            background-color: #e9eef7;
+        }
+        
+        #manualBindingSitesList li:hover .trash-icon {
+            visibility: visible;
+        }
+        
+        /* Style for the manual binding site input groups */
+        .manual-binding-site-inputs {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .manual-binding-site-inputs > div {
+            flex-basis: calc(33% - 10px); 
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .manual-binding-site-inputs label {
+            margin-right: 10px;
+            white-space: nowrap;
+        }
+        
+        .manual-binding-site-inputs input[type="number"] {
+            flex-grow: 1;
+        }
+
+        
+        /* Style for the delete button (if you choose to use a trash icon) */
+        .delete-button {
+            cursor: pointer;
+            background: none;
+            border: none;
+            margin-left: 10px;
+            color: #ef5350;
+        }
+        
+        .delete-button:hover {
+            color: #d32f2f;
+        }
+        
+        .file-input-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        
+        .dialog-button {
+            background-color: #f0f0f0;
+            border: 1px solid #dcdcdc;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+            color: #9c9c9c; 
+        }
+        
+        .dialog-button:hover {
+            background-color: #e8e8e8;
+        }
+        
+        .file-path {
+            margin-left: 10px;
+            font-family: monospace;
+            color: #555;
+        }
+        
+        .scrollable-list-style {
+            list-style-type: none;
+            padding: 8px;
+            max-height: 200px; /* Adjust based on your requirement */
+            overflow-y: auto;
+            border: 1px solid #c5cae9;
+            border-radius: 4px;
+            margin-top: 10px;
+            background-color: #f8f8f8;
+        }
+        
+        .scrollable-list-style li {
+            cursor: default;
+            padding: 5px;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .scrollable-list-style li:hover {
+            background-color: #e9eef7;
+        }
+        
+        /* Job List Styles */
+        #jobList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .job-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status-indicator {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 10px;
+            background-color: gray;
+        }
+        
+        .pending {
+            background-color: grey;
+            
+        }
+        
+        .running {
+            background-color: green;
+            
+        }
+        
+        .completed {
+            background-color: blue;
+            
+        }
+        
+        .failed {
+            background-color: red;
+            
+        }
+        
+        .job-item span {
+            flex: 1;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+        }
+        
+        .load-btn, .cancel-btn {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 12px;
+            margin-left: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background-color 0.2s ease;
+        }
+        
+        .load-btn:hover, .cancel-btn:hover {
+            background-color: #0056b3;
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            vertical-align: middle;
+        }
+        
+        .slider-label-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .slider-container {
+            position: relative;
+            width: 100%;
+            margin-top: 40px;  
+            margin-bottom: 40px;  
+        }
+        
+        .slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 10px;
+            background: #ccc;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+        }
+        
+        .slider:hover {
+            opacity: 1;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #004542; 
+            cursor: pointer;
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #004542;
+            cursor: pointer;
+        }
+        
+        .slider-labels {
+            position: absolute;
+            top: 20px;  /* Position the labels below the slider */
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+        
+        .slider-labels span {
+            position: absolute;
+            transform: translateX(-50%);
+        }
+        
+        #threshold-value {
+            margin-left: 10px; /* Adjust the space between label and value as needed */
+        }
+        
+        #chemical-structure fieldset {
+            display: flex;              /* Use flexbox for easy centering */
+            justify-content: center;    /* Center content horizontally */
+            align-items: center;        /* Center content vertically */
+            height: 300px;              /* Set a specific height or make it responsive as needed */
+            margin: auto;               /* Center the fieldset itself if necessary */
+            text-align: center;         /* Ensures text and inline-elements are centered */
+        }
+        
+        #chemical-structure img {
+            max-width: 100%;            /* Image can scale up to 100% of its container */
+            max-height: 100%;           /* Limits the image height to the container */
+            height: auto;               /* Maintain aspect ratio */
+            width: auto;                /* Maintain aspect ratio */
+        }
+        
+        .pH-group {
+            display: flex;
+            justify-content: space-between; /* This will distribute spacing evenly between the items */
+            align-items: center; /* This will vertically align the items in the middle */
+            margin-bottom: 20px; /* Provide some space below this group */
+        }
+        
+        .pH-group label, .pH-group input {
+            margin-right: 10px; /* Space between label and input and between each group */
+        }
+        
+        .pH-group input {
+            width: 100px; /* Ensures all inputs are the same width */
+        }
+        
+        /* Styling for the input columns */
+        /* Styling for three columns per row */
+        .input-columns {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        /* Ensure checkbox spans full width of its container */
+        .input-columns .form-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .run-button {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+        }
+        .run-button button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        
+               /* Style for the Mini tabs */
+        .tabMini {
+            overflow: hidden;
+            border-bottom: 1px solid #ccc;
+        }
+
+        .tabMini button {
+            background-color: inherit;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }
+
+        .tabMini button:hover {
+            background-color: #ddd;
+        }
+
+        .tabMini button.active {
+            background-color: #ccc;
+        }
+
+        .tabcontentMini {
+            display: none;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-top: none;
+        }
+
+        .tabcontentMini.active {
+            display: block;
+        }
+        
+        
+        
+        
+    </style>
+</head>
+<body>
+
+    <h1>
+        <img src="/Users/aaron.sweeney/Documents/ChemEM_chimera/ChemEM/src/chemEM_logo_transparent.png" alt="ChemEM" style="max-height: 60px;">
+    </h1>
+    
+    <!-- Tab Links -->
+    <div class="tab">
+        <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'QuickConfigTab')">Quick Config</button>
+        <button class="tablinks" onclick="openTab(event, 'LigandsTab')">Ligands</button>
+        <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Site</button>
+        <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
+        <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs</button>
+        <button class="tablinks" onclick="openTab(event, 'ResultsTab')">Results</button>
+        <button class="tablinks" onclick="openTab(event, 'SimulationTab'); getAvalilblePlatforms();">Build</button>
+        <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
+        <button class="tablinks" onclick="openTab(event, 'OptimisationTab')">Optimize</button>
+        <!--<button class="tablinks" >Ligand Interactions</button> -->
+    </div>
+    
+    <div id="QuickConfigTab" class="tabcontent">
+    
+        
+        <div class="container" id="general">
+            <fieldset>
+                <legend>General parameters</legend>
+                    <label for="models">Protein:</label>
+                        <select id="models" name="models" >
+                        <!-- Options will be populated by populateDropdown function -->
+                        </select>
+                    
+                    <label for="maps">Cryo-EM map:</label>
+                        <select id="maps" name="maps">
+                            <option value="N/A">N/A</option> <!-- Default None option -->
+                        </select>
+                    
+                    <label for="resolution">Resolution (Å):</label>
+                    <input type="number" id="resolution" name="resolution" step="0.001" value="2.6">
+                
+                <!-- ligand inputs -->
+                <!-- Ligand SMILES input with Add button -->
+                <div class="form-group input-with-button">
+                    <label for="ligandSmiles">Ligand SMILES:</label>
+                    <input type="text" id="ligandSmiles" name="ligandSmiles" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                    <button type="button" class="add-button" onclick="addLigand()">Add</button>
+                </div>
+
+                <!-- Ligand File input with Add button -->
+                <div class="form-group input-with-button">
+                    
+                    <label for="ligandFile">Ligand File:</label>
+                    <!--<input type="file" id="ligandFile" name="ligandFile">-->
+                    <div class="form-group file-input-group">
+                    
+                        <button type="button" class="dialog-button" id="ligandFile" onclick="readFile('ligandFilePath')">Choose File</button>
+                        <span class="file-path" id="ligandFilePath"></span>
+                    </div>
+                    <button type="button" class="add-button" onclick="addLigandFile()">Add</button>
+                </div>
+                
+                 <!-- Interactive list for added ligands -->
+                <div class="form-group">
+                    <label for="ligandList">Added Ligands:</label>
+                    <ul id="ligandList"></ul>
+                </div>
+                
+            </fieldset>
+        </div>
+        
+        <div class="container" id="bindingsite">
+            <fieldset>
+                <legend>Binding site definition</legend>
+                <!-- Binding site centroids -->
+                <label style="font-weight: bold;">Centroid:</label>
+                <div class="centroid-input-group">
+                    
+                    <label>X:</label>
+                    <input type="number" id="centroidX" name="centroidX" step="0.001">
+                    
+                    
+                    <label>Y:</label>
+                    <input type="number" id="centroidY" name="centroidY" step="0.001">
+                    
+                   
+                    <label>Z:</label>
+                    <input type="number" id="centroidZ" name="centroidZ" step="0.001">
+                    
+                    
+                </div>
+                <!-- Box size inputs -->
+                <label style="font-weight: bold;">Box size:</label>
+                <div class="manual-binding-site-inputs">
+                    <div>
+                    
+                        <label>X:</label>
+                        <input type="number" id="QuickboxSizeX" value="" step="0.5">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="QuickboxSizeY" value="" step="0.5">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="QuickboxSizeZ" value="" step="0.5">
+    
+                    </div>
+                    
+                </div>
+                <div>
+                <button type="button" class="add-button"  onclick="addCentroid()">Add</button>
+                </div>
+                
+                
+                
+                <!-- List for added centroids -->
+                <div class="form-group">
+                    <label for="centroidList">Added Centroids:</label>
+                    <ul id="centroidList"></ul>
+                </div>
+                
+            </fieldset>
+        </div>
+        
+        
+        <div class="container" id="systemparameters">
+            <fieldset>
+                <legend>System parameters</legend>
+                <div class="form-group file-input-group">
+                    <label for="outputDirectory">Output Location:</label>
+                    <button type="button" class="dialog-button" id="outputDirectory" onclick="setDir('output')">Choose Folder</button>
+                    <span class="file-path" id="output"></span>
+                </div>
+                <div class="form-group file-input-group">
+                    <label for="chememBackend">Add ChemEM Executable:</label>
+                    <button type="button" class="dialog-button" id="chememBackend" onclick="readFileAndAlterChemEM('avalible_chemem_exes')">Choose File</button>
+                    <span class="file-path" id="chememBackendPath"></span>
+                </div>
+                <div>
+                 <label for="chememExes">ChemEM Executable:</label>
+                     <select id="chememExes" name="chememExes">
+                     <!-- Options will be populated by populateDropdown function -->
+                     </select>
+                </div>
+            </fieldset>
+        </div>
+        
+        <div class="container" id="runtime-option">
+            <fieldset>
+            <legend>Runtime Options</legend>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: significant features
+                    <input type="checkbox" id="significant_features" name="significant_features">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: difference map
+                    <input type="checkbox" id="difference_map" name="difference_map">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: split density
+                    <input type="checkbox" id="pre_process_split_density" name="pre_process_split_density">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: auto split point
+                    <input type="checkbox" id="auto_split_point" name="auto_split_point">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        
+            <div class="form-group">
+                <label class="checkbox-label">
+                    pre process: auto split zone
+                    <input type="checkbox" id="auto_split_zone"  name="auto_split_zone">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Fitting
+                    <input type="checkbox" id="fitting" name="fitting">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Post Process
+                    <input type="checkbox" id="post_process" name="post_process">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+            
+            <div class="form-group">
+                <label class="checkbox-label">
+                    Rescore
+                    <input type="checkbox" id="rescore" name="rescore">
+                    <span class="checkmark"></span>
+                </label>
+            </div>
+        
+        </fieldset>
+    </div>
+    
+        <!-- Advanced Options -->
+    <div class="container" id="advanced-options">
+        <fieldset>
+            <legend>
+                <span class="toggle-arrow" onclick="toggleAdvancedOptions()">Advanced Options &#9660;</span>
+            </legend>
+            <div class="collapse" id="advancedOptionsContent">
+
+                    <div class="form-group">
+                        <label for="label_threshold">Pre Processing: Label threshold</label>
+                        <input type="number" id="label_threshold" name="label_threshold" step="0.001" placeholder= "0.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="auto_split_radius">Pre Processing: Auto-zone radius</label>
+                        <input type="number" id="auto_split_radius" name="auto_split_radius" step="0.001" placeholder="5.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="mi_weight">Fitting: MI weight</label>
+                        <input type="number" id="mi_weight" name="mi_weight" step="0.1", placeholder="50">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="global_k">Fitting: Global K</label>
+                        <input type="number" id="global_k" name="global_k" step="0.1", placeholder="75">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="docking_radius">Fitting: Docking radius </label>
+                        <input type="number" id="docking_radius" name="docking_radius" step="0.001" placeholder="15.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Fitting: Flexible sidechains
+                            <input type="checkbox" id="flexible_side_chains" name="flexible_side_chains">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Fitting: Implicit Solvent
+                            <input type="checkbox" id="solvent" name="solvent">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="n_ants">Fitting: <i>N</i> Ants</label>
+                        <input type="number" id="n_ants" name="n_ants" step="1", placeholder="20">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="n_cpu">Fitting: <i>N</i> CPU</label>
+                        <input type="number" id="n_cpu" name="n_cpu" step="1", placeholder="20">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="max_iterations">Fitting: <i>N</i> Iterations</label>
+                        <input type="number" id="max_iterations" name="max_iterations" step="1">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="generate_diverse_solutions">Fitting: Diverse solutions</label>
+                        <input type="number" id="generate_diverse_solutions" name="generate_diverse_solutions" step="0.01" placeholder="0.0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Post Process: Flexible sidechains
+                            <input type="checkbox" id="refine_side_chains" name="refine_side_chains" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="post_process_num_solutions">Post Process: <i>N</i> Solutions</label>
+                        <input type="number" id="post_process_num_solutions" name="post_process_num_solutions" step="1", placeholder="15">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="cycles">Post Process: Simulate Anneling Cycles</label>
+                        <input type="number" id="cycles" name="cycles" step="1", placeholder="4">
+                    </div>
+
+            </div><!-- end of advance options -->
+        </fieldset>
+    
+    </div>
+            
+    <div class="buttons">
+    <button type="reset" onclick=resetQuickConfigTab()>Reset</button>
+    <button type="button" class="submit" onclick=saveConfFile()>Save Config file</button>
+    <button type="button" class="submit" onclick=runChemEM()>Run ChemEM</button>
+    </div>
+    
+    </div><!-- end of tab -->
+    
+    
+    <div id="LigandsTab" class="tabcontent">
+    <div class="container" id="ligandcontent">
+        <legend>Protonate Ligands</legend>
+            
+            
+            <div class="form-group pH-group">
+                <label for="pHMax">pH max:</label>
+                <input type="number" id="pHMax" name="pHMax" step="0.01" value="8.4" style="width: 100px;">
+        
+                <label for="pHMin">pH min:</label>
+                <input type="number" id="pHMin" name="pHMin" step="0.01" value="6.4" style="width: 100px;">
+        
+                <label for="pHSTD">pKa Precision:</label>
+                <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" style="width: 100px;">
+            </div>
+            <!-- Ligand SMILES input with Add button -->
+            <div class="form-group input-with-button">
+                <label for="ligandSmilesForProtonation">Ligand SMILES:</label>
+                <input type="text" id="ligandSmilesForProtonation" name="ligandSmilesForProtonation" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
+                <button type="button" class="add-button" onclick="ProtonateLigand()">Protonate</button>
+            </div>
+            
+    </div>
+    
+    <div class="container" id="chemical-structure">
+        
+        <fieldset>
+        
+            <legend>Chemical Structure</legend>
+            
+        
+        </fieldset>
+    </div>
+    
+    <div class="container" id="protonation-states">
+    <fieldset>
+        <legend>Protonation States</legend>
+        <label style="font-weight: bold;">Protonated SMILES:</label>
+        <ul id="protonatedSmilesList"></ul>
+    </fieldset>
+    </div>
+</div><!-- end of tab -->
+    
+    <div id="BindingSiteTab" class="tabcontent">
+        <div class="container" id="manual-binding-site">
+            <fieldset>
+                <legend>Binding Site Definition</legend>
+                
+                <button type="button" onclick="activateMarkerPlacement()">From Marker</button>
+                <button type="button" onclick="saveBindingSite()">Save</button>
+                <button type="button" onclick="resetBindingSiteFields()" >New</button>
+                <button type="button" onclick="autoSiteFinder()">Autodetect sites</button>
+                <!-- Centroid inputs -->
+                <label style="font-weight: bold;">Centroid:</label>
+                <div class="manual-binding-site-inputs">
+                    
+                    <div>
+                        <label>X:</label>
+                        <input type="number" id="manualCentroidX" value="147.525" step="0.1">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="manualCentroidY" value="159.684" step="0.1">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="manualCentroidZ" value="157.044" step="0.1">
+                    </div>
+                </div>
+
+                <!-- Box size inputs -->
+                <label style="font-weight: bold;">Box size:</label>
+                <div class="manual-binding-site-inputs">
+                    <div>
+                        <label>X:</label>
+                        <input type="number" id="manualboxSizeX" value="25" step="0.5">
+                    </div>
+                    <div>
+                        <label>Y:</label>
+                        <input type="number" id="manualboxSizeY"  step="0.5">
+                    </div>
+                    <div>
+                        <label>Z:</label>
+                        <input type="number" id="manualboxSizeZ" value="25" step="0.5">
+                    </div>
+                </div>
+            </fieldset>
+        </div>
+        
+        
+        <div class="container" id="manual-binding-site">
+            
+            <fieldset>
+            
+                <legend>Saved Binding Sites</legend>
+                <label style="font-weight: bold;">Saved Binding Sites</label>
+                <ul id="manualBindingSitesList"></ul>
+            
+            </fieldset>
+        </div>
+    
+    </div><!-- end of tab -->
+    
+     <div id="MaskTab" class="tabcontent">
+      <!-- Top Container: Common Ligand density masking -->
+      <div class="container" id="ligand-masking-container">
+        <fieldset>
+          <legend>Ligand density masking</legend>
+          <label style="font-weight: bold;">BindingSite: </label>
+          <input type="text" id="bindingSiteInput" disabled>
+          <label style="font-weight: bold;">Protocol: </label>
+          
+          <select id="protocolDropdown" onchange="handleProtocolChange()">
+            <option value="automated-significant-features">Automated Significant Features</option>
+            <option value="significant-features">Significant Features</option>
+            <option value="binding-site-mask">Binding Site Mask</option>
+            <option value="difference-map">Difference Map</option>
+            <option value="confidence-map">Confidence Map</option>
+          </select>
+        </fieldset>
+      </div>
+    
+      <!-- Middle Container: Protocol-specific options -->
+      <div class="container" id="protocol-options-container">
+        <!-- Automated Significant Features -->
+        <fieldset id="automated-significant-features-options">
+          <legend>Automated Significant Features</legend>
+          
+          <button type="button" onclick="runAutoMask()">Run</button>
+
+          <div>
+          </br>
+             <label class="checkbox-label">
+               Use Confidence Map
+              <input type="checkbox" id="autoUseConfidenceMap" checked>
+              <span class="checkmark"></span>
+            </label>
+          </div>
+          <div>
+            <label>Filters:</label>
+            <input type="text" id="autoFilters" placeholder="Enter filters">
+          </div>
+        </fieldset>
+    
+        <!-- Significant Features -->
+        <fieldset id="significant-features-options" style="display:none;">
+          <legend>Significant Features</legend>
+          <button type="button" onclick="runSignificantFeatures()">Run</button>
+          <div>
+          </br>
+            <label class="checkbox-label">
+              <input type="checkbox" id="sigUseConfidenceMap" checked>
+              Use Confidence Map
+              <span class="checkmark"></span>
+            </label>
+          </div>
+          <div>
+            <label>Filters:</label>
+            <input type="text" id="sigFilters" placeholder="Enter filters">
+          </div>
+        </fieldset>
+    
+        <!-- Binding Site Mask -->
+        <fieldset id="binding-site-mask-options" style="display:none;">
+          <legend>Binding Site Mask</legend>
+          <button type="button" onclick="runBindingSiteMask()">Run</button>
+          <div>
+          </br>
+            <label class="checkbox-label">
+              <input type="checkbox" id="maskUseConfidenceMap" checked>
+              Use Confidence Map
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </fieldset>
+    
+        <!-- Difference Map -->
+        <fieldset id="difference-map-options" style="display:none;">
+          <legend>Difference Map</legend>
+          <button type="button" onclick="runDifferenceMap()">Run</button>
+          <!-- Add any additional inputs/options as needed -->
+        </fieldset>
+    
+        <!-- Confidence Map -->
+        <fieldset id="confidence-map-options" style="display:none;">
+          <legend>Confidence Map</legend>
+          <button type="button" onclick="runConfidenceMap()">Run</button>
+          <div>
+            </br>
+            <label class="checkbox-label">
+              <input type="checkbox" id="confUseModel">
+              Use Model
+              <span class="checkmark"></span>
+            </label>
+          </div>
+        </fieldset>
+      </div>
+    
+      <!-- Bottom Container: Unchanged Masked Maps -->
+      <div class="container" id="mask-results-container">
+        <fieldset>
+          <legend>Masked Maps</legend>
+          <label for="MaskedMapList">Masked Maps:</label>
+          <ul id="SigFeatBindingSiteList"></ul>
+        </fieldset>
+      </div>
+    </div><!-- end of tab-->
+    
+
+    <div id="JobsTab" class="tabcontent">
+        <div class="container" id="jobcontent">
+            <legend>Submitted Jobs</legend>
+            <div id="jobListContainer">
+                <ul id="jobList"></ul>
+            </div>
+        </div>
+        
+        <div class="container" id="loadJobFromDir">
+            <fieldset>
+                <legend>Load Results</legend>
+                    <div class="form-group file-input-group">
+                        <label for="loadJob">Results directory:</label>
+                        <button type="button" class="dialog-button" id="loadJob" onclick="setDir('loadJob')">Choose Folder</button>
+                        <span class="file-path" id="loadJobPath"></span>
+                    </div>
+                    <button type="button" class="load-button" onclick="loadJobFromPath()">Load</button>  
+            </fieldset>
+        </div>
+    </div><!-- end of tab -->
+
+     <div id="ResultsTab" class="tabcontent">
+          <div class="container" id="preprocResultsContent">
+              <legend>Pre-Processing Results</legend>
+              <label style="font-weight: bold;">Map Files</label>
+              <ul id="preprocMapsList"></ul>
+          </div>
+          
+          <div class="container" id="postprocResultsContent">
+              <legend>Post-Processing Results</legend>
+              <label style="font-weight: bold;">Solutions</label>
+              <ul id="postprocMapsList"></ul>
+          </div>
+          
+          <div class="container" id="fittingResultsContent">
+              <legend>Fitting Results</legend>
+              <label style="font-weight: bold;">Solutions</label>
+              <ul id="fittingMapsList"></ul>
+          </div>
+          
+     </div><!-- end of tab -->
+     
+     <div id="SimulationTab" class="tabcontent">
+         <div class="container" id="BuildSimulationContent">
+             <legend>Simulation Builder</legend>
+              <label style="font-weight: bold;">Map Files</label>
+              <label for="SimulationMaps">Cryo-EM map:</label>
+                  <select id="SimulationMaps" name="SimulationMaps">
+                      <option value="N/A">N/A</option> <!-- Default None option -->
+                  </select>
+                 
+              <label for="mapBias">Map Bias Constant:</label>
+              <input type="number" id="mapBias" name="mapBias" step="1.0" value="75">
+              
+              
+              <label for="simuationResolution">Resolution (Å):</label>
+              <input type="number" id="simulationResolution" name="simulationResolution" step="0.001" value="2.6">
+              
+              
+              <label style="font-weight: bold;">Solution</label>
+              <input type="text" id="SimulationSolutionInput" disabled>
+              
+              <label for="simulationModels" style="font-weight: bold;">Protein Model:</label>
+                  <select id="simulationModels" name="simulationModels" >
+                      <option value="N/A">N/A</option> 
+                      <option value="SelectedAtoms">Selected Atoms</option> <!-- Default None option -->
+                  <!-- Options will be populated by populateDropdown function -->
+                  </select>
+              
+              <label for="avaliblePlatforms">Platform:</label>
+                  <select id="avaliblePlatforms" name="avaliblePlatforms">
+                      
+                  </select>
+                  
+              <label for="startTemperatureInput">Temperature (K):</label>
+              <input type="number" id="startTemperatureInput" value="100"/>
+              
+              
+             <!-- New Restraints Section -->
+             <fieldset style="margin-top: 15px; padding: 10px; border: 1px solid #ccc;">
+             <legend style="font-weight: bold;">Restraints</legend>
+             
+             <!-- Protein Constraints Group -->
+             <div style="margin-bottom: 10px;">
+                 <input type="checkbox" id="constrainProtein" name="constrainProtein">
+                 <label for="constrainProtein" style="font-weight: bold;">Constrain protein</label>
+                 
+                 <!-- Protein Constraint Options -->
+                 <div style="margin-left: 20px;">
+                     <input type="checkbox" id="constrainProteinBackbone" name="constrainProteinBackbone">
+                     <label for="constrainProteinBackbone">Backbone only</label>
+                     
+                     <input type="checkbox" id="constrainProteinSidechain" name="constrainProteinSidechain">
+                     <label for="constrainProteinSidechain">Sidechain only</label>
+                 </div>
+             </div>
+             
+             <!-- Ligand Constraints Group -->
+             <div style="margin-bottom: 10px;">
+                 <input type="checkbox" id="constrainLigandAtoms" name="constrainLigandAtoms">
+                 <label for="constrainLigandAtoms">Constrain ligand atoms</label>
+             </div>
+             
+             <!-- SSE Constraints Group -->
+             <div style="margin-bottom: 10px;">
+                 <input type="checkbox" id="constrainSSE" name="constrainSSE">
+                 <label for="constrainSSE" style="font-weight: bold;">Constrain Secondary Structure Elements (SSE's)</label>
+                 
+                 <!-- SSE Constraint Options -->
+                 <div style="margin-left: 20px;">
+                     <input type="checkbox" id="constrainHelices" name="constrainHelices">
+                     <label for="constrainHelices">Helices</label>
+                     
+                     <input type="checkbox" id="constrainSheets" name="constrainSheets">
+                     <label for="constrainSheets">Sheets</label>
+                 </div>
+             </div>
+         </fieldset>
+         </br>
+              
+              
+              <label for="avalibleSolventModels">Implicit Solvent:</label>
+                <select id="avalibleSolventModels" name="avalibleSolventModels">
+                    <!-- Dropdown Options for Platform -->
+                    <option value="None">None</option>
+                    <option value="GBn2">GBn2 solvation model</option>
+                    <option value="GBn">GBn solvation model</option>
+                    <option value="OBC2">Onufriev-Bashford-Case GBSA (GBOBC-II)</option>
+                    <option value="OBC1">Onufriev-Bashford-Case GBSA (GBOBC-I)</option>
+                    <option value="HCT">Hawkins-Cramer-Truhlar</option>
+                </select>
+              
+              
+             
+             <button type="button" class="add-button" onclick="buildSimulation()">Build</button>
+         </div>
+         
+     </div><!-- end of tab -->
+     
+     <div id="RunSimulationTab" class="tabcontent">
+         <div class="container" id="SimulationContent">
+         <legend>Simulation</legend>
+         </div>
+         
+         <div class="container" id="preprocResultsContent">
+         <legend>Control Panel</legend>
+             <label for="temperatureInput">Temperature (K):</label>
+             <input type="number" id="temperatureInput"/>
+             <label for="mapBiasInSim">Map Bias Constant:</label>
+             <input type="number" id="mapBiasInSim" name="mapBiasInSim" step="1.0">
+             
+             <!--step size -->
+             
+             <label for="HbondTug">Restraints:</label>
+             <button id="SaltBridgeTug" onclick="SaltBridgeTug()">Saltbridge</button>
+             <button id="HbondTug" onclick="HBondTug()">HBond</button>
+             <button id="WeakHbondTug" onclick="WeakHBondTug()">Weak HBond</button>
+             <button id="PiPi-P-Tug" onclick="PiPiPTug()">π-P</button>
+             <button id="PiPi-T-Tug" onclick="PiPiTTug()">π-T</button>
+             
+             <button id="HBond-Pi-Tug" onclick="HBondPiTug()">π-Cation</button>
+             
+             <button id="Cation-Pi-Tug" onclick="CationPiTug()">π-Cation</button>
+             
+             <button id="Halogen-Pi-Tug" onclick="HalogenPiTug()">π-Halogen</button>
+             <button id="Halogen-Bond-Tug" onclick="HalogenBondTug()">Halogen Bond</button>
+             
+             <button id="toggleTugButton" onclick="toggleTugMode()">Toggle Tug Mode</button>
+             
+             
+             <label for="SimulatingAnneling">Algorithms:</label>
+             <button id="SimAnnButton" onclick="runSimulatedAnneling()">Simulated Annealing</button>
+             <button id="minimiseSimulationButton" onclick="minimiseSimulation()">Minimize</button>
+             
+             <label for="toggleButton">Control:</label>
+             <button id="toggleButton">Run</button>
+             <button id="StopSimulationButton">Stop</button> 
+             <button id="SaveSimulationButton">Save</button> 
+             <button id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button> 
+             <button id="AddCovelentLigand" onclick="AddCovelentLigandToSimulation()">Add Covelent Ligand</button>
+             
+             <!-- undo -->
+         </div>
+         
+         <div class="container" id="preprocResultsContent">
+             <legend>Active Restraints</legend>
+             <div id="activeRestraintsContainer">
+                 <ul id="activeRestraints"></ul>
+             </div>
+         </div>
+         
+         
+     </div><!-- end of tab -->
+     
+
+    
+    <div id="OptimisationTab" class="tabcontent">
+    
+        <div class="container" id="FreeEnergyContent">
+        <legend>Free Energy Calculation</legend>
+        
+        <select id="methodSelect" onchange="showFreeEnergyMethodParams()">
+            <option value="">Select a method</option>
+            <option value="option_mmgbsa">MM/GBSA</option>
+            <option value="method2">Method 2</option>
+            
+        </select>
+
+        <!-- Container for method-specific input parameters -->
+        <div id="freeEnergyMethodParamsContainer"></div>
+        </div>
+    
+        
+    </div><!-- end of tab -->
+    
+    
+    <script>
+    let ligandIdCounter = 0;
+    let bindingSiteCounter = 0;
+    let jobIdCounter = 0;
+    
+    //delay execution untill the user has stopped typing for n milliseconds, wrap function around it in DOM.
+    function debounce(func, delay) {
+        let debounceTimer;
+        return function() {
+            const context = this;
+            const args = arguments;
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => func.apply(context, args), delay);
+        };
+    }
+    
+    function autoSiteFinder() {
+        sendSiteValueToBackend("chemem:AutoSiteFinder", "None")
+    }
+    
+    function activateMarkerPlacement() {
+            
+            
+            sendSiteValueToBackend("chemem:BindingSiteFromMarker", "None");
+            
+    }
+
+    // Function to open a tab
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    
+    function toggleAdvancedOptions() {
+        var content = document.getElementById("advancedOptionsContent");
+        var arrow = document.querySelector(".toggle-arrow");
+        if (content.style.display === "none" || content.style.display === "") {
+            content.style.display = "block";
+            arrow.innerHTML = "Advanced Options &#9650;"; // Arrow pointing up
+        } else {
+            content.style.display = "none";
+            arrow.innerHTML = "Advanced Options &#9660;"; // Arrow pointing down
+        }
+    }
+    
+    
+    function updateSelect(elementId, options) {
+        const selectElement = document.getElementById(elementId);
+        
+        if (!selectElement) {
+            alert("No select element found with ID:");
+            return;
+        }
+        selectElement.innerHTML = ''; // Clear existing options
+        
+        if (elementId === "maps") {
+            // Add default None option
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            selectElement.appendChild(defaultOption);
+        }
+        if (elementId === "SimulationMaps") {
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            selectElement.appendChild(defaultOption);
+        }
+        if (elementId === "simulationModels") {
+            
+            const defaultOption = document.createElement('option');
+            defaultOption.value = 'None';
+            defaultOption.text = 'None';
+            
+            selectElement.appendChild(defaultOption);
+            const selectedOption = document.createElement('option'); 
+            selectedOption.value = 'SelectedAtoms';
+            selectedOption.text = 'Selected Atoms';
+            selectElement.appendChild(selectedOption);
+        }
+        
+        options.forEach(optionValue => {
+            const option = document.createElement('option');
+            option.value = optionValue;
+            option.text = optionValue;
+            selectElement.appendChild(option);
+        });
+    }
+    
+    function sendSiteValueToBackend(action, siteValue) {
+        
+        var xhr = new XMLHttpRequest(); // Create a new XMLHttpRequest object
+        var url = action + "?siteValue=" + encodeURIComponent(JSON.stringify(siteValue)); // Construct the URL with action and query parameter
+        xhr.open("GET", url, true); // Prepare the request
+    
+        xhr.onreadystatechange = function() { // Call a function when the state changes
+            if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+                // Request finished. Do processing here.
+                console.log("Site value sent to backend:", siteValue);
+            }
+        }
+    
+        xhr.send(); // Send the request
+    }
+    
+    function readFile(file) {
+    //reads a file and adds it to chemem paramters 
+        sendSiteValueToBackend("chemem:ReadFile", file)
+    }
+    
+    function readFileAndAlterChemEM(file) {
+    //reads a file and alters the state of chemEM
+        sendSiteValueToBackend("chemem:ReadFileAndAlterChemEM", file)
+    }
+    
+    function setDir(dir) {
+        sendSiteValueToBackend("chemem:SetDir", dir)
+    
+    }
+    
+    function setFilePath( elementId, file){
+        document.getElementById(elementId).textContent = file;
+    }
+    
+    function loadJobFromPath() {
+        
+        sendSiteValueToBackend("chemem:LoadJobFromPath", "None");
+        openTab(event, 'ResultsTab');
+    
+    }
+    
+    
+    function addLigandFile() {
+        ligandIdCounter++;
+    
+        // Collect the file path from the span, not an input field
+        const ligandFilePath = document.getElementById("ligandFilePath").textContent.trim();
+        if (!ligandFilePath) {
+            alert("No ligand file provided.");
+            return;
+        }
+    
+        const className = "PathParameter"; 
+        const ligandData = {
+            id: ligandIdCounter,
+            value: ligandFilePath,
+            class: className
+        };
+    
+        // Send the JSON object to the backend for the file handling
+        sendSiteValueToBackend("chemem:AddLigandFile", ligandData);
+        
+        // Optionally clear the displayed file path
+        document.getElementById("ligandFilePath").textContent = '';
+    
+        // Update the ligand list on the UI
+        addLigandToList(ligandData);
+    }
+    
+    function addLigand() {
+        
+        ligandIdCounter++;
+        
+        // Collect the SMILES string from the input field
+        const smilesString = document.getElementById("ligandSmiles").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string provided.");
+            return;
+        }
+        
+        const className = "SmilesParameter"; // Static for now, change as needed
+        const ligandData = {
+            id: ligandIdCounter,
+            value: smilesString,
+            class: className
+        };
+        
+        sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData)
+        document.getElementById("ligandSmiles").value = '';
+        addLigandToList(ligandData);
+    }
+    
+    function addLigandToList(ligandData) {
+        const ligandList = document.getElementById('ligandList');
+    
+        // Create the list item
+        const li = document.createElement('li');
+        li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
+        li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
+        
+        // Create the remove button
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = function() { removeLigand(ligandData.id); };  // Placeholder function for now
+    
+        // Append the button to the list item
+        li.appendChild(removeBtn);
+    
+        // Append the list item to the ligand list
+        ligandList.appendChild(li);
+    }
+
+    
+    function removeLigand(ligandId) {
+        const ligandItem = document.getElementById(`ligand-${ligandId}`);
+        if (ligandItem) {
+            ligandItem.parentNode.removeChild(ligandItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveLigand", ligandId);
+        
+    }
+    
+    function removeAllProtonatedSmiles() {
+        // Get the unordered list element by its ID
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Remove all child <li> elements
+        while (list.firstChild) {
+            list.removeChild(list.firstChild);
+        }
+        sendSiteValueToBackend("chemem:CleanProtonationImage", "None");
+    }
+
+    
+    function ProtonateLigand() {
+        
+        var phmax = document.getElementById("pHMax").value; 
+        var phmin = document.getElementById("pHMin").value; 
+        var phstd = document.getElementById("pHSTD").value;
+        
+        if (!phmax) {
+            phmax = 8.4;
+        }
+        if (!phmin) {
+            phmin = 6.4;
+        }
+        if (!phstd) {
+            phstd = 1.0;
+        }
+        
+        
+        const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string provided.");
+            return;
+        }
+        
+        var siteValue = `${phmax} | ${phmin} | ${phstd}`;
+        sendParameterToBackend("chemem:ProtonateSmiles", smilesString, siteValue, "ProtonationParameter");
+        document.getElementById("ligandSmilesForProtonation").value = '';
+    }
+    
+    function addSmilesToProtonationList(smiles) {
+        if (!smiles) {
+            alert("No SMILES string provided.");
+            return;
+        }
+    
+        // Find the unordered list where the SMILES will be added
+        const list = document.getElementById('protonatedSmilesList');
+    
+        // Create a new list item
+        const listItem = document.createElement('li');
+    
+        // Add the SMILES string as text content of the list item
+        listItem.textContent = smiles;
+        
+        
+        
+         
+         const addButton = document.createElement("button");
+         addButton.className = "icon-button"; // Add a class for styling
+         addButton.onclick = function() {
+             
+             ligandIdCounter++;
+             const className = "SmilesParameter"; // Static for now, change as needed
+             const ligandData = {
+                 id: ligandIdCounter,
+                 value: smiles,
+                 class: className
+             };
+             sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData);
+             addLigandToList(ligandData);
+             
+         };
+         
+         const addIcon =  document.createElement("img");
+         addIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/add.svg"; 
+         addIcon.alt = "Add";
+         addIcon.className = "icon";
+         addButton.appendChild(addIcon)
+        
+    
+        // Create the View button
+        const viewButton = document.createElement("button");
+        addButton.className = "icon-button"; 
+        viewButton.onclick = function() {
+            
+            sendSiteValueToBackend("chemem:ShowLigandSmilesImage", smiles);
+        };
+        const viewIcon =  document.createElement("img");
+        viewIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/view.svg";
+        viewIcon.alt = "View";
+        viewIcon.className = "icon";
+        viewButton.appendChild(viewIcon);
+        
+        
+        
+        
+        // Append the buttons to the list item
+        listItem.appendChild(addButton);
+        listItem.appendChild(viewButton);
+    
+        // Append the list item to the unordered list
+        list.appendChild(listItem);
+    }
+    
+    function displayChemicalStructureOld(imagePath) {
+        // Get the container where the image should be displayed
+        const container = document.querySelector("#chemical-structure fieldset");
+        
+        // Check if an image already exists
+        let img = container.querySelector("img");
+        
+        if (!img) {
+            // Create a new img element if it does not exist
+            img = document.createElement("img");
+            container.appendChild(img);
+        }
+    
+        // Set the image source to the provided path
+        img.src = imagePath;
+        img.alt = "Chemical Structure";
+        img.style.width = "100%"; // Set the width of the image to fit the container
+        img.style.maxWidth = "300px"; // Optionally, limit the maximum width
+        img.style.height = "auto"; // Maintain the aspect ratio
+    }
+    
+    function displayChemicalStructure(imagePath) {
+        // Get the container where the image should be displayed
+        const container = document.querySelector("#chemical-structure fieldset");
+        
+        // Check if an image already exists
+        let img = container.querySelector("img");
+        
+        if (!img) {
+            // Create a new img element if it does not exist
+            img = document.createElement("img");
+            container.appendChild(img);
+        }
+    
+        // Set the image source to the provided path
+        img.src = imagePath;
+        img.alt = "Chemical Structure";
+        // Inline styles removed since CSS will handle the image sizing and centering
+    }
+    
+    function addCentroid() {
+        var x = document.getElementById("centroidX").value;
+        var y = document.getElementById("centroidY").value;
+        var z = document.getElementById("centroidZ").value;
+        var boxX = document.getElementById("QuickboxSizeX").value;
+        var boxY = document.getElementById("QuickboxSizeY").value;
+        var boxZ = document.getElementById("QuickboxSizeZ").value;
+    
+        // Generate a unique key for the binding site
+        var currentBindingSiteKey = generateUniqueId();
+        sendSiteValueToBackend("chemem:IncrementBindingSiteCounter", currentBindingSiteKey)
+    
+        if (x && y && z && boxX && boxY && boxZ) {
+            var siteValue = `Centroid: (${x}, ${y}, ${z}) | Box Size: (${boxX}, ${boxY}, ${boxZ});`;
+            var bindingSiteValue = `(${x}, ${y}, ${z}) | (${boxX}, ${boxY}, ${boxZ})`;
+            sendParameterToBackend("chemem:AddBindingSiteToConf", currentBindingSiteKey, bindingSiteValue, "BindingSiteParameter" );
+            
+            // Add site value to the visual list
+            var centroidListUI = document.getElementById("centroidList");
+            var li = document.createElement("li");
+            li.textContent = siteValue + " ";
+            //here is new!!
+            li.setAttribute('data-key', currentBindingSiteKey);
+            centroidListUI.appendChild(li);
+    
+            // Add a delete button to each list item
+            var deleteButton = document.createElement("button");
+            deleteButton.textContent = "Delete";
+            deleteButton.onclick = function() {
+                var listItemKey = li.getAttribute('data-key'); // Get the key from the list item
+                centroidListUI.removeChild(li);
+                removeBindingSiteFromConf(listItemKey);
+                
+            };
+            li.appendChild(deleteButton);
+            centroidListUI.appendChild(li);
+    
+            // Clear the input fields
+            resetManualBindingSiteFields();
+        } else {
+            // Optionally, alert the user if not all fields are filled
+            alert('Please fill in all fields.');
+        }
+    }
+    
+    
+    
+    function removeBindingSiteFromConf(key) {
+        sendSiteValueToBackend("chemem:RemoveBindingSiteFromConf", key);
+    }
+    
+    function removeBindingSite(key) {
+        sendSiteValueToBackend("chemem:RemoveBindingSite", key);
+    }
+    
+    function generateUniqueId() {
+        return 'bindingSite-' + Date.now();
+    }   
+    
+    function saveBindingSite() {
+        
+        sendSiteValueToBackend("chemem:SaveSite", "None");
+    
+    }
+    
+    function resetBindingSiteFields() {
+    
+        document.getElementById("manualCentroidX").value = '';
+        document.getElementById("manualCentroidY").value = '';
+        document.getElementById("manualCentroidZ").value = '';
+        document.getElementById("manualboxSizeX").value = '';
+        document.getElementById("manualboxSizeY").value = '';
+        document.getElementById("manualboxSizeZ").value = '';
+        sendSiteValueToBackend("chemem:ResetBindingSiteFields", "None");
+        
+        
+        
+    }
+    
+    function resetManualBindingSiteFields() {
+        document.getElementById("centroidX").value = '';
+        document.getElementById("centroidY").value = '';
+        document.getElementById("centroidZ").value = '';
+        document.getElementById("QuickboxSizeX").value = '';
+        document.getElementById("QuickboxSizeY").value = '';
+        document.getElementById("QuickboxSizeZ").value = '';
+        
+    }
+    
+    //function to add binding site with input 
+    function checkAllFieldsFilled() {
+        const centroidX = document.getElementById("manualCentroidX").value;
+        const centroidY = document.getElementById("manualCentroidY").value;
+        const centroidZ = document.getElementById("manualCentroidZ").value;
+        const boxSizeX = document.getElementById("manualboxSizeX").value;
+        const boxSizeY = document.getElementById("manualboxSizeY").value;
+        const boxSizeZ = document.getElementById("manualboxSizeZ").value;
+    
+        if (centroidX && centroidY && centroidZ && boxSizeX && boxSizeY && boxSizeZ) {
+            bindingSiteFromInputsOrChange();
+        }
+    }
+    
+    function bindingSiteFromInputsOrChange() {
+        // Logic to execute when all fields are filled
+        var x = document.getElementById("manualCentroidX").value;
+        var y = document.getElementById("manualCentroidY").value;
+        var z = document.getElementById("manualCentroidZ").value;
+        var boxX = document.getElementById("manualboxSizeX").value;
+        var boxY = document.getElementById("manualboxSizeY").value;
+        var boxZ = document.getElementById("manualboxSizeZ").value;
+        var bindingSiteValue = `(${x}, ${y}, ${z}) | (${boxX}, ${boxY}, ${boxZ})`;
+        sendParameterToBackend("chemem:AddBindingSiteFromInputsOrChange", "None", bindingSiteValue, "BindingSiteParameter" );
+
+    }
+
+    
+    //function to add binding site to binding site tab
+    function addBindingSiteEntry(siteValue, dataKey) {
+        const bindingSiteList = document.getElementById("manualBindingSitesList");
+        
+        
+        // Create the list item
+        const li = document.createElement("li");
+        li.textContent = siteValue;
+        li.setAttribute('data-key', dataKey); // Set the data-key attribute
+        
+        
+        // Create the Load button
+        const loadButton = document.createElement("button");
+        loadButton.className = "icon-button"; // Add a class for styling
+        loadButton.onclick = function() {
+            sendSiteValueToBackend("chemem:RenderBindingSiteFromClick", dataKey)
+            // Add logic to load binding site details here
+        };
+        
+        // Create the image element for the Load button
+        const loadIcon = document.createElement("img");
+        loadIcon.src = "img/view.png";
+        loadIcon.alt = "Load";
+        loadIcon.className = "icon"; // Add a class for styling
+        
+        // Append the image to the Load button
+        loadButton.appendChild(loadIcon);
+        
+        // Create the + button 
+        // transfer to conf 1 here
+        const addButton = document.createElement("button");
+        addButton.className = "icon-button"; // Add a class for styling
+        addButton.onclick = function() {
+            
+            sendSiteValueToBackend("chemem:TransferSiteToConf", dataKey)
+            // Add additional functionality here
+        };
+        const addIcon =  document.createElement("img");
+        addIcon.src = "img/add.png"; 
+        addIcon.alt = "+";
+        addIcon.className = "icon";
+        addButton.appendChild(addIcon)
+        
+        // Create the Delete button
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "icon-button delete-button-click"; // Add a class for styling
+        deleteButton.onclick = function() {
+            bindingSiteList.removeChild(li);
+            removeBindingSite(dataKey); // Ensure this function is implemented to handle backend removal
+        };
+        
+        // Create the image element for the Delete button
+        const deleteIcon = document.createElement("img");
+        deleteIcon.src = "img/trash.png"; // Update this path as needed
+        deleteIcon.alt = "Delete";
+        deleteIcon.className = "icon"; // Add a class for styling
+        
+        // Append the image to the Delete button
+        deleteButton.appendChild(deleteIcon);
+        
+        // Create the Mask button
+        const maskButton = document.createElement("button");
+        maskButton.className = "icon-button";
+        maskButton.onclick = function() {
+            setEditBindingSite(siteValue);
+            sendSiteValueToBackend("chemem:SetEditBindingSiteValue", dataKey);
+            openTab(event, "MaskTab");
+        }
+        const maskIcon = document.createElement("img");
+        maskIcon.src = "img/mask.png"; 
+        maskIcon.alt = "Mask";
+        maskIcon.className = "icon";
+        maskButton.appendChild(maskIcon);
+        
+        
+        
+        // Append buttons to the list item
+        li.appendChild(loadButton);
+        li.appendChild(addButton);
+        li.appendChild(deleteButton);
+        li.appendChild(maskButton);
+        
+        // Append the list item to the binding site list
+        bindingSiteList.appendChild(li);
+    }
+    
+    function triggerDeleteButtonClickOnBindingSite(dataKey) {
+        
+        const bindingSiteList = document.getElementById("manualBindingSitesList");
+        const items = bindingSiteList.getElementsByTagName("li");
+        
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].getAttribute("data-key") === dataKey) {
+                const deleteButton = items[i].querySelector(".delete-button-click");
+                
+                if (deleteButton) {
+                    deleteButton.click();
+                }
+                break;
+            }
+        }
+    }
+    
+    function populateFieldsFromBackendString(dataString) {
+        // Use a regular expression to extract the centroid and box size values
+        const centroidMatch = dataString.match(/Centroid: \(([^,]+), ([^,]+), ([^\)]+)\)/);
+        const boxSizeMatch = dataString.match(/Box Size: \(([^,]+), ([^,]+), ([^\)]+)\)/);
+        
+        
+        
+        if (centroidMatch && boxSizeMatch) {
+            // Extract the centroid values
+            const centroidX = parseFloat(centroidMatch[1]);
+            const centroidY = parseFloat(centroidMatch[2]);
+            const centroidZ = parseFloat(centroidMatch[3]);
+    
+            // Extract the box size values
+            const boxSizeX = parseFloat(boxSizeMatch[1]);
+            const boxSizeY = parseFloat(boxSizeMatch[2]);
+            const boxSizeZ = parseFloat(boxSizeMatch[3]);
+    
+            // Populate the input fields
+            document.getElementById("manualCentroidX").value = centroidX;
+            document.getElementById("manualCentroidY").value = centroidY;
+            document.getElementById("manualCentroidZ").value = centroidZ;
+            document.getElementById("manualboxSizeX").value = boxSizeX;
+            document.getElementById("manualboxSizeY").value = boxSizeY;
+            document.getElementById("manualboxSizeZ").value = boxSizeZ;
+        } else {
+            console.error("Invalid data string format");
+        }
+    }
+    
+    function updateBindingSiteEntry(siteValue, dataKey) {
+        // Find the list item with the corresponding data-key attribute
+        const li = document.querySelector(`li[data-key="${dataKey}"]`);
+        
+        
+        // Check if the list item exists
+        if (li) {
+            alert("li exists");
+            
+            // Clear existing child elements except the buttons
+            while (li.firstChild) {
+                li.removeChild(li.firstChild);
+            }
+            
+            // Set the updated text content
+            const textNode = document.createTextNode(siteValue);
+            li.appendChild(textNode);
+    
+            // Create the Load button
+            const loadButton = document.createElement("button");
+            loadButton.className = "icon-button"; // Add a class for styling
+            loadButton.onclick = function() {
+                sendSiteValueToBackend("chemem:RenderBindingSiteFromClick", dataKey)
+                // Add logic to load binding site details here
+            };
+            
+            // Create the image element for the Load button
+            const loadIcon = document.createElement("img");
+            loadIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/view.png";
+            loadIcon.alt = "Load";
+            loadIcon.className = "icon"; // Add a class for styling
+            
+            // Append the image to the Load button
+            loadButton.appendChild(loadIcon);
+            
+            // Create the + button (Placeholder for additional functionality)
+            const addButton = document.createElement("button");
+            addButton.textContent = "+";
+            addButton.onclick = function() {
+                alert(`Additional functionality for: ${siteValue}`);
+                // Add additional functionality here
+            };
+            
+            // Create the Delete button
+            const deleteButton = document.createElement("button");
+            deleteButton.className = "icon-button"; // Add a class for styling
+            deleteButton.onclick = function() {
+                li.remove();
+                removeBindingSite(dataKey); // Ensure this function is implemented to handle backend removal
+            };
+            
+            // Create the image element for the Delete button
+            const deleteIcon = document.createElement("img");
+            deleteIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/trash.png"; // Update this path as needed
+            deleteIcon.alt = "Delete";
+            deleteIcon.className = "icon"; // Add a class for styling
+            
+            // Append the image to the Delete button
+            deleteButton.appendChild(deleteIcon);
+            
+            // Append buttons to the list item
+            li.appendChild(loadButton);
+            li.appendChild(addButton);
+            li.appendChild(deleteButton);
+            
+        } else {
+            alert("Unable to update binding site");
+        }
+    }
+
+    
+    function sendCheckboxData(checkboxId, isChecked) {
+        const className = "BooleanParameter";
+        const data = {
+            id: checkboxId,
+            value: isChecked,
+            class: className
+            };
+        
+        sendSiteValueToBackend("chemem:UpdateChemEMParameter", data);
+    }
+    
+    function sendParameterToBackend(command, dataId, dataValue, className ) {
+        const data = {
+        id : dataId,
+        value: dataValue,
+        class : className
+        };
+        sendSiteValueToBackend(command, data);
+    }
+        
+    function selectOptionByValue(selectId, value) {
+      const selectElement = document.getElementById(selectId);
+      if (selectElement) {
+        selectElement.value = value;
+        // Trigger change event if needed
+        const event = new Event('change');
+        selectElement.dispatchEvent(event);
+      }
+    }
+
+    function onModelsPopulated() {
+        const selectElement = document.getElementById('models');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentModel", selectElement.value, selectElement.value, "ModelParameter");
+        }
+    }
+    
+    function onExesPopulated() {
+        const selectElement = document.getElementById('chememExes');
+        if (selectElement.value) { 
+            sendParameterToBackend("chemem:SetCurrentExe", selectElement.value, selectElement.value, "PathParameter")
+        }
+       
+    }
+    
+    function onMapsPopulated() {
+        const selectElement = document.getElementById('maps');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetCurrentMap", selectElement.value, selectElement.value, "MapParameter");
+        }
+    }
+    
+    function onSimulationMapsPopulated() {
+        const selectElement = document.getElementById('SimulationMaps');
+        if (selectElement.value) {
+            sendParameterToBackend("chemem:SetSimulationMap", selectElement.value, selectElement.value, "MapParameter");
+        }
+    }
+    
+    function onSimulationModelsPopulated() {
+        const selectElement = document.getElementById('simulationModels');
+        if (selectElement.value) {
+            let parameterType = (selectElement.value === 'None' || selectElement.value === 'SelectedAtoms') ? 'StringParameter' : 'ModelParameter';
+            sendParameterToBackend("chemem:SetSimulationModel", selectElement.value, selectElement.value, parameterType);
+        }
+    }
+    
+    //function onSimulationModelsPopulated() {
+    //    const selectElement = document.getElementById('simulationModels');
+    //    if (selectElement.value) {
+    //        sendParameterToBackend("chemem:SetSimulationModel", selectElement.value, selectElement.value, "ModelParameter");
+    //    }
+    //}
+    
+    function saveConfFile() {
+        
+         sendSiteValueToBackend("chemem:SaveConfFile", "None");
+        
+    }
+    
+    function runChemEM() {
+        sendSiteValueToBackend("chemem:RunChemEM", "None");
+        // Find the button/link that triggers the "Jobs" tab
+        const jobsTabButton = document.querySelector(".tablinks[onclick*='JobsTab']");
+        
+        // Check if the button is found and switch to the "Jobs" tab
+        if (jobsTabButton) {
+            openTab({ currentTarget: jobsTabButton }, "JobsTab");
+        } else {
+            console.error("Jobs tab button/link not found!");
+        }
+        
+    }
+   
+    // Function to open a tab
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    
+    
+    function test_alert() {
+        alert('TestAlert');
+    
+    }
+    
+    // Function to add a job
+    
+    function addJob(jobData) {
+        
+        
+        const { id, status } = jobData;
+        const jobId = id;
+        const jobList = document.getElementById("jobList");
+        if (!jobList) {
+            alert("Failed to find the job list element.");
+            return; 
+        }
+        
+        // Create a new list item to represent the job
+        const li = document.createElement("li");
+        li.className = 'job-item';
+        li.id = `job-${jobId}`;
+        
+        // Create a status indicator element
+        const statusIndicator = document.createElement('div');
+        statusIndicator.className = 'status-indicator';
+        
+        // Add initial status class
+        statusIndicator.classList.add(status.toLowerCase());
+        
+        // Create a job info span to show job ID, status, and command
+        const jobInfo = document.createElement('span');
+        jobInfo.textContent = `Job ID: ${jobId}, Status: ${status}`;
+        
+        // Create a button to load job details (you can implement the action)
+        const loadBtn = document.createElement("button");
+        loadBtn.className = 'load-btn';
+        loadBtn.textContent = "Load";
+        loadBtn.onclick = function (event) {
+            sendSiteValueToBackend("chemem:LoadChimeraXJob", jobId); 
+            openTab(event, 'ResultsTab');
+    
+        };
+        
+    
+        // Create a button to cancel the job (implement the backend job cancellation logic)
+        const removeBtn = document.createElement("button");
+        removeBtn.className = 'cancel-btn';
+        removeBtn.textContent = "Cancel";
+        removeBtn.onclick = function () {
+            removeJob(jobId);
+        };
+        
+        // Append elements to the job item
+        li.appendChild(statusIndicator);
+        li.appendChild(jobInfo);
+        li.appendChild(loadBtn);
+        li.appendChild(removeBtn);
+        
+        // Add the job item to the job list
+        jobList.appendChild(li);
+        updateJobStatus(jobId, "Running");
+        
+    }
+    
+    // Function to remove a job item from the UI
+    function removeJob(jobId) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            jobItem.parentNode.removeChild(jobItem);
+        }
+        sendSiteValueToBackend("chemem:RemoveJob", jobId)
+    }
+
+
+    function updateJobStatus(jobId, newStatus) {
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (jobItem) {
+            const statusIndicator = jobItem.querySelector('.status-indicator');
+            const jobInfo = jobItem.querySelector('span');
+    
+            // Update the class for the status indicator
+            statusIndicator.className = 'status-indicator';  // Reset class
+            statusIndicator.classList.add(newStatus.toLowerCase());  // Add new status class
+    
+            // Update the job info text content
+            jobInfo.textContent = `Job ID: ${jobId}, Status: ${newStatus}`;
+        }
+    }
+    
+    function resetQuickConfigTab() {
+        
+        const quickConfigTab = document.getElementById("QuickConfigTab");
+    
+        // IDs to retain their values (dropdowns and file paths)
+        const retainIds = ['models', 'maps', 'chememBackendPath'];
+    
+        // Query all input fields, lists, and spans within QuickConfigTab except those specified to retain
+        const elements = quickConfigTab.querySelectorAll('input, select, ul, span:not(.toggle-arrow)');
+    
+        elements.forEach(element => {
+            const id = element.id;
+    
+            // Skip elements with specific IDs to retain
+            if (retainIds.includes(id)) return;
+    
+            // Handle input fields (number, text, checkbox)
+            if (element.tagName === 'INPUT') {
+                if (element.type === 'checkbox') {
+                    // Specific logic to ensure refine_side_chains is always checked
+                    if (id === 'refine_side_chains') {
+                        element.checked = true; // Ensure refine_side_chains is checked
+                    } else {
+                        element.checked = false; // Uncheck all other checkboxes
+                    }
+                } else {
+                    element.value = ''; // Clear all text and number fields
+                }
+            }
+    
+            // Handle unordered lists (like Added Ligands or Centroids)
+            if (element.tagName === 'UL') {
+                element.innerHTML = ''; // Clear the list
+            }
+    
+            // Handle spans (used for file paths, etc.)
+            if (element.tagName === 'SPAN') {
+                element.textContent = ''; // Clear file path display spans
+            }
+        });
+    
+    
+        sendSiteValueToBackend("chemem:ResetConfig", "None");
+    }
+
+    function handleProtocolChange() {
+      // Get the selected protocol
+      const protocol = document.getElementById('protocolDropdown').value;
+      
+      // Define all protocol option fieldset IDs
+      const protocols = [
+        'automated-significant-features-options',
+        'significant-features-options',
+        'binding-site-mask-options',
+        'difference-map-options',
+        'confidence-map-options'
+      ];
+      
+      // Hide all protocol option fieldsets
+      protocols.forEach(id => {
+        document.getElementById(id).style.display = 'none';
+      });
+      
+      // Show the selected protocol's fieldset
+      if(protocol === 'automated-significant-features'){
+        document.getElementById('automated-significant-features-options').style.display = 'block';
+      } else if(protocol === 'significant-features'){
+        document.getElementById('significant-features-options').style.display = 'block';
+      } else if(protocol === 'binding-site-mask'){
+        document.getElementById('binding-site-mask-options').style.display = 'block';
+      } else if(protocol === 'difference-map'){
+        document.getElementById('difference-map-options').style.display = 'block';
+      } else if(protocol === 'confidence-map'){
+        document.getElementById('confidence-map-options').style.display = 'block';
+      }
+    }
+    
+    function runSignificantFeatures() {
+        
+        var isChecked = document.getElementById('sigUseConfidenceMap').checked;
+        var useConfidenceMapValue = isChecked ? "1.0" : "0.0";
+        // var filters = document.getElementById('sigFilters').value;
+
+        var siteValue = `${useConfidenceMapValue}`;
+        
+        sendParameterToBackend("chemem:RunSignificantFeatures", "MaskOptions", siteValue, "MaskOptionsParameter");
+    }
+    
+    function runAutoMask() {
+        
+        var isChecked = document.getElementById('autoUseConfidenceMap').checked;
+        var useConfidenceMapValue = isChecked ? "1.0" : "0.0";
+        // var filters = document.getElementById('sigFilters').value;
+
+        var siteValue = `${useConfidenceMapValue}`;
+        
+        sendParameterToBackend("chemem:RunAutoMask", "MaskOptions", siteValue, "MaskOptionsParameter");
+    }
+   
+    
+    function runBindingSiteMask() {
+        alert("runBindingSiteMask");
+    }
+    
+    function runDifferenceMap() {
+        alert("runDifferenceMap");
+    }
+    
+    function runConfidenceMap() {
+        alert("runConfidenceMap");
+    }
+    
+    
+   function setEditBindingSite(value) {
+       document.getElementById('bindingSiteInput').value = value;
+   }
+   
+    // Function to add a significant feature list item in the Mask tab
+    function addSigFeatListItem(textValue, dataKey) {
+      // Get the unordered list where items are added
+      const ul = document.getElementById('SigFeatBindingSiteList');
+      const li = document.createElement('li');
+      li.textContent = textValue;
+      li.setAttribute('data-key', dataKey);
+    
+      // Create the hide button first and set it to be hidden initially
+      const hideButton = document.createElement('button');
+      hideButton.style.display = 'none'; // Hide by default
+      const hideIcon = document.createElement("img");
+      hideIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/hide.svg";
+      hideIcon.alt = "Hide";
+      hideIcon.className = "icon";
+      hideButton.appendChild(hideIcon);
+    
+      // Create the show button and add its icon
+      const showButton = document.createElement('button');
+      showButton.className = "icon-button";
+      const showIcon = document.createElement("img");
+      showIcon.src = "/Users/aaron.sweeney/Documents/ChemEM_chimera_v2/ChemEM-X/src/icons/view.svg";
+      showIcon.alt = "Show";
+      showIcon.className = "icon";
+      showButton.appendChild(showIcon);
+    
+      // Attach the click event handler for the show button
+      showButton.onclick = function() {
+        // Send command to backend to show the significant feature
+        sendSiteValueToBackend("chemem:ShowSignificantFeature", dataKey);
+        // Toggle button visibility
+        showButton.style.display = 'none';
+        hideButton.style.display = 'inline';
+      };
+    
+      // Attach the click event handler for the hide button
+      hideButton.onclick = function() {
+        // Send command to backend to hide the significant feature
+        sendSiteValueToBackend("chemem:HideSignificantFeature", dataKey);
+        // Toggle button visibility back
+        hideButton.style.display = 'none';
+        showButton.style.display = 'inline';
+      };
+    
+      // Append both buttons to the list item and then add the list item to the list
+      li.appendChild(showButton);
+      li.appendChild(hideButton);
+      ul.appendChild(li);
+    }
+
+    
+    function removeAllSigFeatListItems() {
+        const ul = document.getElementById('SigFeatBindingSiteList');
+        while (ul.firstChild) {
+            ul.removeChild(ul.firstChild);
+        }
+    }
+    
+    
+    //load job functions
+    function addLoadMapItem(name, id) {
+        // Create the li element
+        const li = document.createElement('li');
+        li.textContent = name;
+        li.setAttribute('data-id', id);
+
+        // Create the button element
+        const button = document.createElement('button');
+        button.textContent = 'Hide';
+        button.addEventListener('click', function () {
+            if (button.textContent === 'View') {
+                viewFunction(id);
+                button.textContent = 'Hide';
+            } else {
+                hideFunction(id);
+                button.textContent = 'View';
+            }
+        });
+        
+        // Append the button to the li
+        li.appendChild(button);
+
+        // Append the li to the ul
+        const ul = document.getElementById('preprocMapsList');
+        ul.appendChild(li);
+    }
+
+    function viewFunction(id) {
+        sendSiteValueToBackend("chemem:ViewSolutionMap", id);
+    }
+
+    function hideFunction(id) {
+        sendSiteValueToBackend("chemem:HideSolutionMap", id);
+    }
+    
+    function addLoadFittingSolution(data, id, list) {
+        const li = document.createElement('li');
+        li.textContent = data;
+        li.setAttribute('data-id', id);
+        
+        const button = document.createElement('button');
+        button.textContent = 'View';
+        button.addEventListener('click', function () {
+            if (button.textContent == 'View') {
+                viewFittingFunction(id);
+                button.textContent = 'Hide';
+            } else {
+                hideFittingFunction(id);
+                button.textContent = 'View';
+            }
+        });
+        
+        const addButton = document.createElement('button');
+        addButton.textContent = 'Add';
+        addButton.addEventListener('click', function () {
+            sendSiteValueToBackend("chemem:AddSolutionToSimulation", id);
+            openTab(event, 'SimulationTab');
+            getAvalilblePlatforms();
+        });
+        
+        
+        
+        li.appendChild(button);
+        li.appendChild(addButton);
+        const ul = document.getElementById(list);
+        ul.appendChild(li);
+    }
+    
+    function viewFittingFunction(id) {
+        sendSiteValueToBackend("chemem:ViewFittingSolutionMap", id);
+    }
+
+    function hideFittingFunction(id) {
+        sendSiteValueToBackend("chemem:HideFittingSolutionMap", id);
+    }
+    
+    function clearResultsLists() {
+        const lists = ['#preprocMapsList', '#postprocMapsList', '#fittingMapsList'];
+        
+        lists.forEach(function(listId) {
+            const ul = document.querySelector(listId);
+            if (ul) {
+                alert("found ul")
+                ul.innerHTML = '';
+            }
+        });
+    }
+    
+    //simulation functions 
+    function setSolutionValue(solutionText) {
+        
+        var solutionInput = document.getElementById('SimulationSolutionInput');
+        solutionInput.value = solutionText;
+    }
+   
+   function buildSimulation() {
+       sendSiteValueToBackend("chemem:BuildSimulation", "None");
+   }
+       
+    function addPlatformToList(textContent) {
+        // Find the list element by its ID
+        const list = document.getElementById('avaliblePlatforms');
+    
+        // Check if the list element exists
+        if (list) {
+            // Create a new list item element
+            const listItem = document.createElement('option');
+    
+            // Set the text of the list item to be the text provided
+            listItem.textContent = textContent;
+    
+            // Append the new list item to the list
+            list.appendChild(listItem);
+            
+        } else {
+            // Log an error if the list element was not found
+            console.error('The list was not found.');
+        }
+    }
+   
+   function getAvalilblePlatforms() {
+       sendSiteValueToBackend("chemem:GetAvaliblePlatforms", "None");
+   
+   }
+   
+   function setPlatform(platform) {
+       sendSiteValueToBackend("chemem:SetPlatform", platform);
+   }
+   
+   function runSimulation() {
+       sendSiteValueToBackend("chemem:RunSimulation", "None");
+   }
+   
+   function pauseSimulation() {
+       sendSiteValueToBackend("chemem:PauseSimulation", "None");
+   }
+   
+   
+   function stopSimulation() {
+      sendSiteValueToBackend("chemem:StopSimulation", "None");
+   }
+   
+   function sendTemperatureToBackend(temp) {
+      
+       sendParameterToBackend("chemem:SetSimulationTempreture", "simulation_temp", temp, "IntParameter");
+
+   }
+   
+   function sendMapBiasToBackend(bias) {
+       sendParameterToBackend("chemem:SetSimulationMapBias", "map_bias", bias, "IntParameter");
+   }
+   
+   function minimiseSimulation() {
+       sendSiteValueToBackend("chemem:MinimiseSimulation", "None");
+   }
+   
+   var tugModeActive = false;
+
+    function toggleTugMode() {
+        // This function will communicate with ChimeraX to toggle the mouse mode.
+        if (tugModeActive) {
+            // Switch back to default mouse mode
+            sendSiteValueToBackend("chemem:DisableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Enable Tug Mode';
+            
+        } else {
+            // Switch to tug mouse mode
+            sendSiteValueToBackend("chemem:EnableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Disable Tug Mode';
+            
+        }
+        tugModeActive = !tugModeActive;
+    }
+    
+    
+    function SaltBridgeTug() {
+        sendSiteValueToBackend("chemem:SetSaltBridgeTug", "None");
+    }
+    
+    function HBondTug() {
+        sendSiteValueToBackend("chemem:SetHBondTug", "None");
+    }
+    
+    function WeakHBondTug() {
+        sendSiteValueToBackend("chemem:SetWeakHBondTug", "None");
+    }
+    
+    function PiPiPTug() {
+        sendSiteValueToBackend("chemem:SetPiPiPTug", "None");
+    }
+    
+    function CationPiTug() {
+         sendSiteValueToBackend("chemem:SetCationPiTTug", "None");
+    }
+    
+    function PiPiTTug() {
+        sendSiteValueToBackend("chemem:SetPiPiTTug", "None");
+    }
+    
+    function HalogenBondTug() {
+        sendSiteValueToBackend("chemem:SetHalogenBondTug", "None");
+    }
+    
+    function addRestraintToList(content, id, restrain_type) {
+        // Get the UL element by its ID
+        var ul = document.getElementById("activeRestraints");
+    
+        // Create a new list item
+        var li = document.createElement("li");
+    
+        // Set the ID for the LI
+        li.setAttribute("data-id", id); // Using data-id to associate the ID value
+    
+        // Add text content to the list item
+        li.textContent = content;
+    
+        // Create a delete button
+        var deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+    
+        // Function to handle the different delete actions
+        function getDeleteFunctionByType(id, restrain_type) {
+            switch(restrain_type) {
+                case 'HbondTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteHbondTug", id);
+                    };
+                
+                case 'WeakHbondTug':
+                    return function () {
+                        sendSiteValueToBackend("chemem:DeleteWeakHbondTug", id);
+                    };
+                case 'PiPiTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeletePiPiTug", id);
+                    };
+            
+                case 'HalogenBondTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteHalogenBondTug", id);
+                    };
+                
+                case 'CationPiTug':
+                    return function() {
+                        sendSiteValueToBackend("chemem:DeleteCationPiTug", id);
+                    };
+                
+                case 'SaltBridgeTug':
+                return function() {
+                    sendSiteValueToBackend("chemem:DeleteSaltBridgeTug", id);
+                };
+                
+                case 'ConstrainProtein':
+                return function() {
+                    sendSiteValueToBackend("chemem:DeleteConstrainProtein", id);
+                };
+                
+                case 'ConstrainBackBone':
+                return function () {
+                    sendSiteValueToBackend("chemem:DeleteConstrainBackBone", id);
+                };
+                
+                case 'ConstrainSidechain':
+                return function () {
+                    sendSiteValueToBackend("chemem:DeleteConstrainSidechain", id);
+                };
+                 
+                 
+                     
+                
+                    
+                default:
+                    return function() {
+                        console.error("Unknown restraint type: " + restrain_type);
+                    };
+            }
+        }
+    
+        // Assign the appropriate delete action based on the restraint type
+        var deleteAction = getDeleteFunctionByType(id, restrain_type);
+    
+        // Add an event listener to the delete button for removing the LI and handling backend call
+        deleteButton.addEventListener("click", function() {
+            ul.removeChild(li);
+            deleteAction();  // Call the appropriate delete function
+        });
+    
+        // Append the delete button to the list item
+        li.appendChild(deleteButton);
+    
+        // Append the list item to the unordered list
+        ul.appendChild(li);
+    }
+    
+    
+    function addRestraintToListOld(content, id) {
+        // Get the UL element by its ID
+        var ul = document.getElementById("activeRestraints");
+    
+        // Create a new list item
+        var li = document.createElement("li");
+    
+        // Set the ID for the LI
+        li.setAttribute("data-id", id); // Using data-id to associate the ID value
+    
+        // Add text content to the list item
+        li.textContent = content;
+    
+        // Create a delete button
+        var deleteButton = document.createElement("button");
+        deleteButton.textContent = "Delete";
+        
+        // Add an event listener to the delete button for removing the LI
+        deleteButton.addEventListener("click", function() {
+            ul.removeChild(li);
+            sendSiteValueToBackend("chemem:DeleteHbondTug", id);
+            
+        });
+    
+        // Append the delete button to the list item
+        li.appendChild(deleteButton);
+    
+        // Append the list item to the unordered list
+        ul.appendChild(li);
+    }
+    
+    function startSimulatedAnneling() {
+        
+         // Collect all input values
+        const values = [];
+        const fieldIds = [
+            'simAnnCycles', 'startTemp', 'normTemp', 'topTemp', 'tempStep', 
+            'initialHeatingInterval', 'holdTopTempInterval', 
+            'equilibriumTime'
+        ];
+
+        fieldIds.forEach(id => {
+            const input = document.getElementById(id);
+            values.push(input ? parseInt(input.value) || 0 : 0);
+        });
+
+        const localMinimisation = document.getElementById('localMinimisation');
+        values.push(localMinimisation ? (localMinimisation.checked ? 1 : 0) : 0);
+
+        // Format the values as a string
+        const valuesString = `[${values.join(', ')}]`;
+        
+        
+        sendParameterToBackend("chemem:RunSimulatedAnneling", "SimulatedAnnelingParameters", valuesString, "SimulatingAnnelingParameter");
+        
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+        
+        
+    }
+    
+    function AddCovelentLigandToSimulation() {
+        resetSimulationDisplay();
+        const simulationContent = document.getElementById('SimulationContent');
+        const ligandForm = document.createElement('div');
+        ligandForm.className = 'covelent-ligand-form';
+        ligandForm.innerHTML = `
+        
+            <div class="form-group">
+                <label for="ligandSMILES">Ligand SMILES:</label>
+                <input type="text" id="ligandSMILES" name="ligandSMILES" placeholder="Enter SMILES string"/>
+            </div>
+            <div class="form-group">
+                <button onclick="submitCovelentLigandForSimulation()">Add Ligand</button>
+            </div>
+            
+            <label for="BondType">Bind Atom With Bond:</label>
+            <small>*Required for manual assignment</small>
+              <select id="BondType" name="BondType">
+                  <!-- Dropdown Options for bond types add more later -->
+                  <option value="1">Single</option>
+                  <option value="2">Double</option>
+                  <option value="3">Triple</option>
+                  
+              </select>
+            
+            <div class="form-group">
+                <button onclick="submitBoundAtom()">Bind Atom Manual</button>
+            </div>
+            
+            <div class="form-group">
+            <!-- onclick="PredictCovelentLigand()"  Make RDKit reaction smarts for each thing and reactions and automatically try and predict the thing!!-->
+            <!-- Add pH!!-->
+                <button >Automatic Binding Prediction</button>
+            </div>
+        `;
+        simulationContent.appendChild(ligandForm);
+    }
+    
+    function submitBoundAtom() {
+        const bondType = document.getElementById('BondType').value;
+        sendParameterToBackend("chemem:BindCovelentLigandToAtom", "bond_type", bondType, "BondTypeParameter");
+        
+        
+    }
+    
+    
+    function submitCovelentLigandForSimulation() {
+        const smilesInput = document.getElementById('ligandSMILES');
+        const smiles = smilesInput.value.trim();
+        sendParameterToBackend("chemem:AddCovelentLigandToSimulation", "covelent_ligand", smiles, "SmilesParameter");
+        
+    }
+    
+    
+    
+    function showCovelentLigandAdvancedOptions(proteinImagePath, ligandImagePath) {
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = `
+            <div class="tabMini">
+                <button class="tablinksMini" onclick="openTabMini(event, 'LigandMini')" id="defaultOpenMini">Ligand</button>
+                <button class="tablinksMini" onclick="openTabMini(event, 'ProteinMini')">Protein</button>
+            </div>
+            <!-- ligand mini tab-->
+            <div id="LigandMini" class="tabcontentMini">
+                <div class="form-group">
+                    <label for="ligandImage">Ligand Structure:</label>
+                    <img src="${ligandImagePath}" id="ligandImage" alt="Ligand Structure" style="width:100%; height:auto;" />
+                </div>
+                
+                <div class="form-group">
+                    <label for="BindLigandAtom">Bind to Ligand Atom (indices):</label>
+                    <input type="number" id="BindLigandAtom" name="BindLigandAtom" placeholder="Enter atom index" />
+                </div>
+                
+                <!-- Remove Ligand atoms-->
+                <div class="form-group">
+                    <label for="removeAtoms">Remove Atoms (indices):</label>
+                    
+                        <div style="display: flex; align-items: center;">
+                            <input type="number" id="removeAtomInput" name="removeAtomInput" placeholder="Enter atom index" />
+                            <button type="button" onclick="addCovelentAtomToRemove('removeAtomInput', 'ligand_remove_atom_idx', 'atomRemovalList')">Add</button>
+                        </div>
+                    
+                     <div id="atomRemovalList" style="margin-top: 10px;">
+                        <ul id="removeAtoms"></ul>
+                    </div>
+                    
+                </div>
+                
+                
+                <!-- Bond Modification -->
+                <div class="form-group">
+                    <label for="modifyLigandBonds">Modify Bonds:</label>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="number" id="startCovelentLigandAtomIndex" name="startCovelentLigandAtomIndex" placeholder="Start index" />
+                        <input type="number" id="endCovelentLigandAtomIndex" name="endCovelentLigandAtomIndex" placeholder="End index" />
+                        <select id="bondTypeLigandCovelent" name="bondTypeLigandCovelent">
+                            <option value="1">Single</option>
+                            <option value="2">Double</option>
+                            <option value="3">Triple</option>
+                        </select>
+                        <button type="button" onclick="addBondModificationLigand()">Add</button>
+                    </div>
+                    <div id="LigandbondModificationList" style="margin-top: 10px;">
+                        <ul id="modifyLigandBonds"></ul>
+                    </div>
+                </div>
+                
+                
+                <div class="form-group">
+                    <button onclick="submitCovelentLigandAdvancedOptions()">Bind Ligand</button>
+                </div>
+            </div>
+            <!-- Protein mini tab-->
+            <div id="ProteinMini" class="tabcontentMini">
+                <div class="form-group">
+                    <label for="proteinImage">Protein Structure:</label>
+                    <img src="${proteinImagePath}" id="proteinImage" alt="Protein Structure" style="width:100%; height:auto;" />
+                </div>
+    
+                
+                <!-- Bond Modification -->
+                <div class="form-group">
+                    <label for="modifyProteinBonds">Modify Bonds:</label>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="number" id="startCovelentProteinAtomIndex" name="startCovelentProteinAtomIndex" placeholder="Start index" />
+                        <input type="number" id="endCovelentProteinAtomIndex" name="endCovelentProteinAtomIndex" placeholder="End index" />
+                        <select id="bondTypeProteinCovelent" name="bondTypeProteinCovelent">
+                            <option value="1">Single</option>
+                            <option value="2">Double</option>
+                            <option value="3">Triple</option>
+                        </select>
+                        <button type="button" onclick="addBondModificationProtein()">Add</button>
+                    </div>
+                    <div id="ProteinbondModificationList" style="margin-top: 10px;">
+                        <ul id="modifyProteinBonds"></ul>
+                    </div>
+                </div>
+                
+    
+                <div class="form-group">
+                    <label for="removeProteinAtoms">Remove Atoms (indices):</label>
+                    <small>Enter atom indices and click "Add" to include them in the list.</small>
+                        <div style="display: flex; align-items: center;">
+                            <input type="number" id="removeProteinAtomInput" name="removeProteinAtomInput" placeholder="Enter atom index" />
+                            <button type="button" onclick="addCovelentAtomToRemove('removeProteinAtomInput','protein_remove_atom_idx', 'ProteinatomRemovalList')">Add</button>
+                        </div>
+                    
+                     <div id="ProteinatomRemovalList" style="margin-top: 10px;">
+                        <ul id="ProteinremoveAtoms"></ul>
+                    </div>
+                    
+                </div>
+                
+            </div>
+        `;
+    
+        // Open the default tab (Ligand)
+        document.getElementById("defaultOpenMini").click();
+    }
+    
+    function addBondModificationProtein() {  
+        
+        const ProteinstartAtomIndex = document.getElementById('startCovelentProteinAtomIndex').value;
+        const ProteinendAtomIndex = document.getElementById('endCovelentProteinAtomIndex').value;
+        const ProteinbondType = document.getElementById('bondTypeProteinCovelent').value;
+        
+        if (ProteinstartAtomIndex !== '' && ProteinendAtomIndex !== '' && ProteinbondType !== '') {
+            
+            const bondModificationList = document.getElementById('modifyProteinBonds');
+            const listItem = document.createElement('li');
+            listItem.textContent = `Bond from ${ProteinstartAtomIndex} to ${ProteinendAtomIndex} as ${ProteinbondType}`;
+            
+            const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Remove';
+                deleteButton.style.marginLeft = '10px';
+                deleteButton.onclick = function() {
+                    bondModificationList.removeChild(listItem);
+                };
+            
+            listItem.appendChild(deleteButton);
+            bondModificationList.appendChild(listItem);
+            
+            const ProteinsiteValue = `${ProteinstartAtomIndex} , ${ProteinendAtomIndex} , ${ProteinbondType}`;
+            sendParameterToBackend("chemem:AddCovelentListParameter", "protein_modified_bond", ProteinsiteValue, "RDBondParameter");
+            
+            
+            // Clear the input fields
+            document.getElementById('startCovelentProteinAtomIndex').value = '';
+            document.getElementById('endCovelentProteinAtomIndex').value = '';
+            document.getElementById('bondTypeProteinCovelent').value = '1';
+            
+            
+        }
+        
+    }
+    
+    
+    function addBondModificationLigand() {
+        const startAtomIndex = document.getElementById('startCovelentLigandAtomIndex').value;
+        const endAtomIndex = document.getElementById('endCovelentLigandAtomIndex').value;
+        const bondType = document.getElementById('bondTypeLigandCovelent').value;
+        
+        
+        
+        if (startAtomIndex !== '' && endAtomIndex !== '' && bondType !== '') {
+            
+            const bondModificationList = document.getElementById('modifyLigandBonds');
+            const listItem = document.createElement('li');
+            listItem.textContent = `Bond from ${startAtomIndex} to ${endAtomIndex} as ${bondType}`;
+            
+            const deleteButton = document.createElement('button');
+                deleteButton.textContent = 'Remove';
+                deleteButton.style.marginLeft = '10px';
+                deleteButton.onclick = function() {
+                    bondModificationList.removeChild(listItem);
+                };
+            
+            listItem.appendChild(deleteButton);
+            bondModificationList.appendChild(listItem);
+            
+            const siteValue = `${startAtomIndex} , ${endAtomIndex} , ${bondType}`;
+            sendParameterToBackend("chemem:AddCovelentListParameter", "ligand_modified_bond", siteValue, "RDBondParameter");
+            
+            
+            // Clear the input fields
+            document.getElementById('startCovelentLigandAtomIndex').value = '';
+            document.getElementById('endCovelentLigandAtomIndex').value = '';
+            document.getElementById('bondTypeLigandCovelent').value = '1';
+            
+        };
+        
+    }
+    
+    function submitCovelentLigandAdvancedOptions() {
+        const atomIndexInput = document.getElementById('BindLigandAtom').value;
+        if (atomIndexInput !== '') {
+             sendParameterToBackend("chemem:AddCovelentParameter", "ligand_atom_bound_index", atomIndexInput, "IntParameter");
+             sendSiteValueToBackend("chemem:BuildCovelentSimulation", "None");
+             resetSimulationDisplay();
+        } else { 
+            alert("Please Specifiy a ligand atom index to bind");
+        }
+        
+    }
+    
+    
+    
+    function addCovelentAtomToRemove(atomInput, parameterName, elementId) {
+        const atomIndexInput = document.getElementById(atomInput);
+        const atomIndex = atomIndexInput.value.trim();
+    
+        if (atomIndex !== '') {
+            const atomRemovalList = document.getElementById(elementId);
+            
+            // Create a new list item for the atom index
+            const listItem = document.createElement('li');
+            listItem.textContent = atomIndex;
+            
+            // Optionally, add a delete button next to each item
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Remove';
+            deleteButton.style.marginLeft = '10px';
+            deleteButton.onclick = function() {
+                atomRemovalList.removeChild(listItem);
+                sendParameterToBackend("chemem:RemoveCovelentListParameter", parameterName, atomIndex, "IntParameter");
+                //TODO!! remove from backend!!
+            };
+            
+            listItem.appendChild(deleteButton);
+            atomRemovalList.appendChild(listItem);
+            
+            sendParameterToBackend("chemem:AddCovelentListParameter", parameterName, atomIndex, "IntParameter");
+            
+            // Clear the input field
+            atomIndexInput.value = '';
+            
+        }
+    }
+        
+    function openTabMini(evt, tabName) {
+        // Declare all variables
+        let i, tabcontent, tablinks;
+    
+        // Get all elements with class="tabcontentMini" and hide them
+        tabcontent = document.getElementsByClassName("tabcontentMini");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].classList.remove("active");
+        }
+    
+        // Get all elements with class="tablinks" and remove the class "active"
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+    
+        // Show the current tab, and add an "active" class to the button that opened the tab
+        document.getElementById(tabName).classList.add("active");
+        evt.currentTarget.className += " active";
+    }
+
+    
+    
+    
+    
+    function AddLigandToSimulation() {
+        const simulationContent = document.getElementById('SimulationContent');
+        // Create the ligand addition form
+        const ligandForm = document.createElement('div');
+        ligandForm.className = 'ligand-form';
+        ligandForm.innerHTML = `
+            
+            <div class="form-group">
+                <label for="ligandSMILES">Ligand SMILES:</label>
+                <input type="text" id="ligandSMILES" name="ligandSMILES" placeholder="Enter SMILES string"/>
+            </div>
+            <div class="form-group">
+                <button onclick="submitLigandForSimulation()">Add Ligand</button>
+            </div>
+            
+        `;
+        simulationContent.appendChild(ligandForm);
+        
+    }
+    
+    function resetSimulationDisplay() {
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+    }
+        
+        
+    function submitLigandForSimulation() {
+        const smilesInput = document.getElementById('ligandSMILES');
+        const smiles = smilesInput.value.trim();
+        sendParameterToBackend("chemem:AddLigandToSimulation", smiles, smiles, "SmilesParameter");
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+    }
+
+    
+    function runSimulatedAnneling() {
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+
+        // Create input fields for simulated annealing parameters
+        const fields = [
+            { id: 'simAnnCycles', label: 'Cycles', value: '1' },
+            { id: 'startTemp', label: 'Start Temperature', value: '0' },
+            { id: 'normTemp', label: 'Normalization Temperature', value: '300' },
+            { id: 'topTemp', label: 'Top Temperature', value: '315'},
+            { id: 'tempStep', label: 'Temperature Step', value: '1'},
+            { id: 'initialHeatingInterval', label: 'Initial Heating Interval', value: '100' },
+            { id: 'holdTopTempInterval', label: 'Hold Top Temperature Interval', value: '1000' },
+            { id: 'equilibriumTime', label: 'Equilibrium Time', value: '200' }
+        ];
+
+        const inputColumns = document.createElement('div');
+        inputColumns.className = 'input-columns';
+
+        fields.forEach(field => {
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `
+                <label for="${field.id}">${field.label}:</label>
+                <input type="number" id="${field.id}" name="${field.id}" value="${field.value}"/>
+            `;
+            inputColumns.appendChild(div);
+        });
+
+        // Add checkbox for local minimization
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        div.innerHTML = `
+            <label for="localMinimisation">Local Minimisation:</label>
+            <input type="checkbox" id="localMinimisation" name="localMinimisation" />
+        `;
+        inputColumns.appendChild(div);
+
+        simulationContent.appendChild(inputColumns);
+
+        // Add the "Run" button
+        const runButtonDiv = document.createElement('div');
+        runButtonDiv.className = 'run-button';
+        runButtonDiv.innerHTML = `
+            <button onclick="startSimulatedAnneling()">Run</button>
+        `;
+        simulationContent.appendChild(runButtonDiv);
+    }
+    
+    
+    function showFreeEnergyMethodParams() {
+        var method = document.getElementById("methodSelect").value;
+        var paramsContainer = document.getElementById("freeEnergyMethodParamsContainer");
+        // Clear previous content
+        paramsContainer.innerHTML = "";
+
+        if (method === "option_mmgbsa") {  paramsContainer.innerHTML = `
+                    <div class="form-group-flex">
+                        <label for="equilibriumRestraints">Equilibrium Restraints:</label>
+                        <select id="equilibriumRestraints" name="equilibriumRestraints">
+                            <option value="None">None</option>
+                            <option value="SSEs">SSEs</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group-flex">
+                        <label for="equilibriumSteps">Equilibrium Steps:</label>
+                        <input type="number" id="equilibriumSteps" name="equilibriumSteps">
+                    </div>
+                    
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="simulationSteps">Simulation Steps:</label>
+                            <input type="number" id="simulationSteps" name="simulationSteps">
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="snapshotPerStep">Snapshot per Steps:</label>
+                            <input type="number" id="snapshotPerStep" name="snapshotPerStep">
+                        </div>
+                    </div>
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="temperature">Temperature (K):</label>
+                            <input type="number" id="temperature" name="temperature" step="1.0" value="300.0">
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="implicitSolventModel">Implicit Solvent Model:</label>
+                            <select id="implicitSolventModel" name="implicitSolventModel">
+                                <option value="GBn2">GBn2 solvation model</option>
+                                <option value="GBn">GBn solvation model</option>
+                                <option value="OBC2">Onufriev-Bashford-Case GBSA (GBOBC-II)</option>
+                                <option value="OBC1">Onufriev-Bashford-Case GBSA (GBOBC-I)</option>
+                                <option value="HCT">Hawkins-Cramer-Truhlar</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group-flex">
+                        <label for="outputDir">Output Directory:</label>
+                        <input type="text" id="outputDir" name="outputDir">
+                    </div>
+                    <div class="form-group-flex-inline">
+                        <div class="form-group-flex">
+                            <label for="runOnClose">Run on Close:</label>
+                            <input type="checkbox" id="runOnClose" name="runOnClose" checked>
+                        </div>
+                        <div class="form-group-flex">
+                            <label for="singleTrajectory">Single Trajectory:</label>
+                            <input type="checkbox" id="singleTrajectory" name="singleTrajectory" checked>
+                        </div>
+                    </div>
+                    <button id="runButton" onclick="runMMGBSAEquilibriumCalculation()">Equilibrate</button>
+                    <button id="runButton" onclick="runMMGBSAFreeEnergyCalculation()">Calculate Free Energy</button>
+                `;
+        }
+    }
+    
+    function runMMGBSAEquilibriumCalculation() {
+        var equilibriumRestraints = document.getElementById("equilibriumRestraints").value;
+        var equilibriumSteps = document.getElementById("equilibriumSteps").value;
+        var simulationSteps = document.getElementById("simulationSteps").value;
+        var snapshotPerStep = document.getElementById("snapshotPerStep").value;
+        var outputDir = document.getElementById("outputDir").value;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        var temperature = document.getElementById("temperature").value;
+        var implicitSolventModel = document.getElementById("implicitSolventModel").value;
+        var singleTrajectory = document.getElementById("singleTrajectory").checked;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        // Validate required fields
+        if (equilibriumRestraints === "") {
+            alert("Please select the Equilibrium Restraints option.");
+            return;
+        } else {
+            sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumRestraints", equilibriumRestraints, "StringParameter");
+        }
+        
+        if (equilibriumSteps === "" || isNaN(equilibriumSteps)) {
+            alert("Please enter a valid number for Equilibrium Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumSteps", equilibriumSteps, "IntParameter");
+        }
+        
+        
+        if (simulationSteps === "" || isNaN(simulationSteps)) {
+            alert("Please enter a valid number for Simulation Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "simulationSteps", simulationSteps, "IntParameter");
+        }
+        
+        if (snapshotPerStep === "" || isNaN(snapshotPerStep)) {
+            alert("Please enter a valid number for Snapshot per Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "snapshotPerStep", snapshotPerStep, "IntParameter");
+        }
+        
+        
+        if (outputDir === "") {
+            alert("Please specify the Output Directory.");
+            return;
+        }
+        
+        
+        if (temperature === "" || isNaN(temperature)) {
+            alert("Please enter a valid temperature.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "temperature", temperature, "FloatParameter");
+        }
+        
+        
+        if (implicitSolventModel === "") {
+            alert("Please select an Implicit Solvent Model.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "implicitSolventModel", implicitSolventModel, "ImplicitSolventParameter");
+        }
+        
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "singleTrajectory", singleTrajectory , "BooleanParameter");
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "runOnClose", runOnClose , "BooleanParameter");
+        sendSiteValueToBackend("chemem:RunMMGBSAEquilibrium", "None");
+        
+        
+    }
+    
+    
+    function runMMGBSAFreeEnergyCalculation() {
+            // Get values from input fields
+        var equilibriumRestraints = document.getElementById("equilibriumRestraints").value;
+        var equilibriumSteps = document.getElementById("equilibriumSteps").value;
+        var simulationSteps = document.getElementById("simulationSteps").value;
+        var snapshotPerStep = document.getElementById("snapshotPerStep").value;
+        var outputDir = document.getElementById("outputDir").value;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        var temperature = document.getElementById("temperature").value;
+        var implicitSolventModel = document.getElementById("implicitSolventModel").value;
+        var singleTrajectory = document.getElementById("singleTrajectory").checked;
+        var runOnClose = document.getElementById("runOnClose").checked;
+        
+        
+        // Validate required fields
+        if (equilibriumRestraints === "") {
+            alert("Please select the Equilibrium Restraints option.");
+            return;
+        } else {
+            sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumRestraints", equilibriumRestraints, "StringParameter");
+        }
+        
+        if (equilibriumSteps === "" || isNaN(equilibriumSteps)) {
+            alert("Please enter a valid number for Equilibrium Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "equilibriumSteps", equilibriumSteps, "IntParameter");
+        }
+        
+        
+        if (simulationSteps === "" || isNaN(simulationSteps)) {
+            alert("Please enter a valid number for Simulation Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "simulationSteps", simulationSteps, "IntParameter");
+        }
+        
+        if (snapshotPerStep === "" || isNaN(snapshotPerStep)) {
+            alert("Please enter a valid number for Snapshot per Steps.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "snapshotPerStep", snapshotPerStep, "IntParameter");
+        }
+        
+        
+        if (outputDir === "") {
+            alert("Please specify the Output Directory.");
+            return;
+        }
+        
+        
+        if (temperature === "" || isNaN(temperature)) {
+            alert("Please enter a valid temperature.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "temperature", temperature, "FloatParameter");
+        }
+        
+        
+        if (implicitSolventModel === "") {
+            alert("Please select an Implicit Solvent Model.");
+            return;
+        } else {
+             sendParameterToBackend("chemem:AddMMGBSAParameter", "implicitSolventModel", implicitSolventModel, "ImplicitSolventParameter");
+        }
+        
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "singleTrajectory", singleTrajectory , "BooleanParameter");
+        
+        sendParameterToBackend("chemem:AddMMGBSAParameter", "runOnClose", runOnClose , "BooleanParameter");
+        
+        sendSiteValueToBackend("chemem:RunMMGBSA", "None");
+        
+    }
+    
+    
+    
+   document.addEventListener('DOMContentLoaded', function() {
+        
+        
+        // Perform the initial tab opening
+        document.getElementById("defaultOpen").click();
+
+        // Send initial data to backend upon loading
+        sendSiteValueToBackend("chemem:UpdateModels", "None");
+        sendSiteValueToBackend("chemem:UpdateMaps", "None");
+        sendSiteValueToBackend("chemem:UpdateExes", "None");
+        sendSiteValueToBackend("chemem:UpdateSimulationMaps", "None");
+        sendSiteValueToBackend("chemem:UpdateSimulationModels", "None");
+        
+        
+        
+        // Attach change listeners to all checkboxes within the runtime option container
+        const checkboxes = document.querySelectorAll('#runtime-option input[type="checkbox"]');
+        checkboxes.forEach(checkbox => {
+            checkbox.addEventListener('change', function() {
+                sendCheckboxData(this.id, this.checked);
+            });
+        });
+        
+        // update current model on selection
+        const selectElement = document.getElementById('models');
+        selectElement.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentModel", this.value, this.value, "ModelParameter");
+        });
+        
+        // Manually trigger the event if there's already a selected value
+        
+        //if (selectElement.value) {
+            
+        //     sendParameterToBackend("chemem:SetCurrentModel", selectElement.value, selectElement.value, "ModelParameter");
+        //}
+        
+        // update current model on selection
+        const selectElementMap = document.getElementById('maps');
+        selectElementMap.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentMap", this.value, this.value, "MapParameter");
+        });
+        
+        const selectElementSimulationMap = document.getElementById('SimulationMaps');
+        selectElementSimulationMap.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetSimulationMap", this.value, this.value, "MapParameter");
+        });
+        
+        //const selectElementSimulationModel = document.getElementById('simulationModels');
+        //selectElementSimulationModel.addEventListener('change', function() {
+        //    sendParameterToBackend("chemem:SetSimulationModel", this.value, this.value, "ModelParameter");
+        //});
+        const selectElementSimulationModel = document.getElementById('simulationModels');
+        selectElementSimulationModel.addEventListener('change', function() {
+            let parameterType = (this.value === 'None' || this.value === 'SelectedAtoms') ? 'StringParameter' : 'ModelParameter';
+            sendParameterToBackend("chemem:SetSimulationModel", this.value, this.value, parameterType);
+        });
+        
+        
+        const selectElementExe = document.getElementById('chememExes');
+        selectElementExe.addEventListener('change', function() {
+            sendParameterToBackend("chemem:SetCurrentExe", this.value, this.value, "PathParameter");
+        });
+        
+        const inputElementresolution = document.getElementById('resolution');
+        inputElementresolution.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementSimulationResolution = document.getElementById('simulationResolution');
+        inputElementSimulationResolution.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateSimulationParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        //update advanced parameters 
+        const inputElementLabelThreshold = document.getElementById('label_threshold');
+        inputElementLabelThreshold.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementAutozoneRadius = document.getElementById('auto_split_radius');
+        inputElementAutozoneRadius.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementMiWeight = document.getElementById('mi_weight');
+        inputElementMiWeight.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementGlobalK = document.getElementById('global_k');
+        inputElementGlobalK.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+            
+        });
+        
+        const inputElementDockingRaidus = document.getElementById('docking_radius');
+        inputElementDockingRaidus.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+        });
+        
+        const inputElementFlexibleSidechains = document.getElementById('flexible_side_chains');
+        inputElementFlexibleSidechains.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementImplicitSolvent = document.getElementById('solvent');
+        inputElementImplicitSolvent.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementNAnts = document.getElementById('n_ants');
+        inputElementNAnts.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementNCpu = document.getElementById('n_cpu');
+        inputElementNCpu.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementNIter = document.getElementById('max_iterations');
+        inputElementNIter.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementDiverseSol = document.getElementById('generate_diverse_solutions');
+        inputElementDiverseSol.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "FloatParameter");
+        });
+        
+        const inputElementPostflexibleSidechains = document.getElementById('refine_side_chains');
+        inputElementPostflexibleSidechains.addEventListener('change', function() {   
+            sendCheckboxData(this.id, this.checked);
+        });
+        
+        const inputElementpostNsol = document.getElementById('post_process_num_solutions');
+        inputElementpostNsol.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        const inputElementpostCycles = document.getElementById('cycles');
+        inputElementpostCycles.addEventListener('input', function() {   
+            sendParameterToBackend("chemem:UpdateChemEMParameter", this.id, this.value, "IntParameter");
+        });
+        
+        
+        
+        //attached manual binding site event listeners 
+        document.getElementById("manualCentroidX").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+        document.getElementById("manualCentroidY").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+        document.getElementById("manualCentroidZ").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+        document.getElementById("manualboxSizeX").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+        document.getElementById("manualboxSizeY").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+        document.getElementById("manualboxSizeZ").addEventListener("input", debounce(checkAllFieldsFilled, 500));
+ 
+         const selectPlatformElement = document.getElementById('avaliblePlatforms');
+         selectPlatformElement.addEventListener('change', function() {
+             
+             setPlatform(this.value);
+             
+             });
+        
+        
+        var toggleButton = document.getElementById('toggleButton');
+
+        toggleButton.addEventListener('click', function () {
+            if (this.textContent === 'Run') {
+                runSimulation(); // Function to be called when button says "Run"
+                this.textContent = 'Pause'; // Change button text to "Pause"
+            } else {
+                pauseSimulation(); // Function to be called when button says "Pause"
+                this.textContent = 'Run'; // Change button text back to "Run"
+            }
+        });
+        
+        var StopSimulationButton = document.getElementById('StopSimulationButton');
+        StopSimulationButton.addEventListener('click', function () {
+            stopSimulation();
+        });
+        
+        const inputSimTempElement = document.getElementById('temperatureInput');
+        inputSimTempElement.addEventListener('input', debounce(function() {
+            sendTemperatureToBackend(this.value);
+        }, 500)); // 500 ms delay
+        
+        const mapBiasInSimElement = document.getElementById('mapBiasInSim');
+        mapBiasInSimElement.addEventListener('input', debounce(function() {
+            sendMapBiasToBackend(this.value);
+        }, 500));
+        
+         document.getElementById('avalibleSolventModels').addEventListener('change', function() {
+
+              sendParameterToBackend("chemem:UpdateSimulationParameter", "solvent", this.value, "ImplicitSolventParameter");
+         });
+         
+         
+         document.getElementById('constrainProtein').addEventListener('change', function() {
+             var isChecked = this.checked;
+             document.getElementById('constrainProteinBackbone').disabled = !isChecked;
+             document.getElementById('constrainProteinSidechain').disabled = !isChecked;
+             // Convert the boolean state to an integer (1 or 0)
+             var intValue = isChecked ? 1 : 0;
+             sendParameterToBackend("chemem:UpdateSimulationParameter", "constrain_protein", intValue, "BooleanParameter");
+         });
+         
+         
+         document.getElementById('constrainProteinBackbone').addEventListener('change', function() { 
+              var isChecked = this.checked;
+              var intValue = isChecked ? 1 : 0;
+              sendParameterToBackend("chemem:UpdateSimulationParameter", "constrain_backbone", intValue, "BooleanParameter");
+         });
+         
+         document.getElementById('constrainProteinSidechain').addEventListener('change', function() { 
+              var isChecked = this.checked;
+              var intValue = isChecked ? 1 : 0;
+              sendParameterToBackend("chemem:UpdateSimulationParameter", "constrain_sidechain", intValue, "BooleanParameter");
+         });
+         
+         document.getElementById('startTemperatureInput').addEventListener('change', function() { 
+              
+              sendParameterToBackend("chemem:UpdateSimulationParameter", "start_temp", this.value, "FloatParameter");
+              
+         });
+         
+         document.getElementById('mapBias').addEventListener('change', function() { 
+              
+              sendParameterToBackend("chemem:UpdateSimulationParameter", "map_bias", this.value, "IntParameter");
+              
+         });
+         
+        
+    });
+    
+   
+    
+    
+    
+    </script>
+</body>
+       
+        
+        

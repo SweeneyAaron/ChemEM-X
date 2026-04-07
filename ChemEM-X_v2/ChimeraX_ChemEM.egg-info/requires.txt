@@ -1,0 +1,2 @@
+ChimeraX-Core~=1.1
+scikit-spatial==7.0
