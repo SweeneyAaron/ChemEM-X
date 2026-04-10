@@ -260,3 +260,6 @@ class TransferSiteToConf(Command):
         site = chemem.parameters.get_list_parameters('binding_sites', query)[0]
         #chemem.parameters.add_list_parameter('binding_sites_conf', site)
         chemem.run_js_code(cls.js_code(site))
+        
+        
+        

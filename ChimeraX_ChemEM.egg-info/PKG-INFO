@@ -1,4 +1,4 @@
-Metadata-Version: 2.1
+Metadata-Version: 2.4
 Name: ChimeraX-ChemEM
 Version: 0.1
 Summary: Protein-Protein Interaction Detector
@@ -24,6 +24,14 @@ Classifier: ChimeraX :: Tool :: ChemEM :: Structure Prediction :: model ligands 
 Requires-Python: >=3.7
 Requires-Dist: ChimeraX-Core~=1.1
 Requires-Dist: scikit-spatial==7.0
+Dynamic: author
+Dynamic: author-email
+Dynamic: classifier
+Dynamic: description
+Dynamic: home-page
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
 
 ProPLID
 

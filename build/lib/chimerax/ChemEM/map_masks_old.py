@@ -16,6 +16,7 @@ from chimerax.map_data import ArrayGridData
 from chimerax.map import Volume
 
 
+
 class SignificantFeatures:
     def __init__(self, session, sig_feat, shape, origin, apix):
         self.session = session

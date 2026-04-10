@@ -14,6 +14,7 @@ class RunAutoMask(Command):
     @classmethod 
     def run(cls, chemem, query):
         
+        '''
         current_model = chemem.parameters.get_parameter('current_model')
         current_map = chemem.parameters.get_parameter('current_map')
         if current_map is not None and current_model is not None:
@@ -35,6 +36,8 @@ class RunAutoMask(Command):
                      )
             
             automask.run()
+            '''
+        print('------->>>', query)
             
         
         

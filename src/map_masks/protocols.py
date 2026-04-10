@@ -67,6 +67,9 @@ class AutoMask:
         
         self.map.region = self.map.full_region() #unpack map
         confidence_map = ConfidenceMap(self.session, self.map).run()
+        print('#######################')
+        print(confidence_map.value)
+        print('#######################')
         
         binding_sites = AutoSiteChimera(self.session,
                                         self.model,

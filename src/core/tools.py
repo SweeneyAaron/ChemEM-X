@@ -12,6 +12,17 @@ from scipy.stats import norm
 from  scipy import ndimage 
 import uuid
 
+def condense_path(path, max_length=25):
+    if len(path) <= max_length:
+        return path  
+
+    part_length = (max_length - 3) // 2  # 3 characters are reserved for "..."
+    start_part = path[:part_length]
+    end_part = path[-part_length:]
+    return f"{start_part}...{end_part}"
+        
+
+
 def get_box_vertices(centroid, box_size):
     """
     Calculate the vertices of a box given its center and dimensions.

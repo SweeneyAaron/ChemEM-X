@@ -1063,7 +1063,7 @@ def hydrogen_mapping(mol, residue_atoms_converted, residue_name ):
             hydrogen_name_to_idx[hydrogen_name] = hydrogen_atom.GetIdx()
             hydrogen_name_to_heavy_atom_name[hydrogen_name] = atom_name
     return hydrogen_name_to_idx, hydrogen_name_to_heavy_atom_name
-        
+
 
 def translate_and_rotate_molecule(coords, index1, target1, index2, target2):
     """

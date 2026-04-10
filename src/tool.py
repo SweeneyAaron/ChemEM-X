@@ -1278,8 +1278,7 @@ class ModelParameter(Parameter):
         value = value.split('-')[0].replace(' ', '')
         value = value.split('.')
         value = tuple([int(i) for i in value])
-        print('NORMAL MODEL PARAMTER')
-        print(value)
+       
         return value
 
 class MapParameter(ModelParameter):
