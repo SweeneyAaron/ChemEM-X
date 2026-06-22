@@ -22,6 +22,8 @@ class Parameter:
      
     def chemem_string(self):
         return f"{self.name} = {self.value}\n"
+    
+    
 
 
 class NumericParameter(Parameter):
@@ -118,17 +120,45 @@ class ModelParameter(Parameter):
 class MapParameter(ModelParameter):
     def __init__(self, name, default):
         super().__init__(name, default)
-    
+
     @classmethod
     def get_from_query(cls, query):
         if query['class'] == cls.__name__:
-            
+
             if query['id'] == 'None':
                 return None
-            
+
             value = cls.get_value(query['value'])
             return cls(query['id'],
                        value)
+
+
+class SimulatingAnnelingParameter(Parameter):
+    """Simulated-annealing schedule sent from the GUI as a list like
+    '[cycles, startTemp, normTemp, topTemp, tempStep, initialHeatingInterval,
+    holdTopTempInterval, equilibriumTime, localMinimisation]'. Each value is
+    unpacked onto a named attribute so SimulationJob can read them directly
+    (job.simulated_anneling.startTemp, .normTemp, ...)."""
+
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+        self.name_tags = ['simAnnCycles', 'startTemp', 'normTemp', 'topTemp',
+                          'tempStep', 'initialHeatingInterval',
+                          'holdTopTempInterval', 'equilibriumTime', 'localMinimisation']
+
+    @classmethod
+    def get_from_query(cls, query):
+        if query['class'] == cls.__name__:
+            c = cls(query['id'], cls.get_value(query['value']))
+            for n, v in zip(c.name_tags, c.value):
+                setattr(c, n, v)
+            return c
+
+    @classmethod
+    def get_value(cls, value):
+        value = value.replace('[', '').replace(']', '').split(',')
+        return [int(i) for i in value]
 
 #---class to hold ChemEM State
 

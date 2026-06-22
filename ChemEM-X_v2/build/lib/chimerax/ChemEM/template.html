@@ -19,9 +19,12 @@
          <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Sites</button>
          <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
          <button class="tablinks" onclick="openTab(event, 'DockTab')">Dock</button>
+         <button class="tablinks" onclick="openTab(event, 'RefineTab')">Refine</button>
          <button class="tablinks" onclick="openTab(event, 'BuildTab')">Build</button>
          <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
-         
+         <button class="tablinks" onclick="openTab(event, 'ScoreTab')">Score</button>
+         <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs<span id="jobsBadge" class="jobs-badge" style="display:none;">0</span></button>
+
      </div>
       
      <div id="SetupTab" class="tabcontent">
@@ -86,10 +89,11 @@
                         
                         <label for="ligandFile">Ligand File:</label>
                         <!--<input type="file" id="ligandFile" name="ligandFile">-->
-                        <div class="form-group file-input-group">
-                        
+                        <div class="form-group file-input-group ligand-drop-zone" id="ligandDropZone">
+
                             <button type="button" class="dialog-button" id="ligandFile" onclick="readFile('ligandFilePath')">Choose File</button>
                             <span class="file-path" id="ligandFilePath"></span>
+                            <span class="drop-hint">or drop an .sdf / .mol file here</span>
                         </div>
                         <button type="button" class="add-button" onclick="addLigandFile()">Add</button>
                     </div>
@@ -112,6 +116,52 @@
     </div><!-- end of tab -->
     
     <div id="LigandsTab" class="tabcontent">
+        <div class="container" id="chemical-structure">
+            <fieldset>
+                <legend>Chemical Structure</legend>
+            </fieldset>
+        </div>
+
+        <div class="container" id="tracked-ligands">
+            <fieldset>
+                <legend>Tracked SDF Ligands</legend>
+                <label style="font-weight: bold;">Loaded SDF Ligands (movable + savable)</label>
+                <ul id="trackedLigandList"></ul>
+                <div id="trackedLigandStatus"></div>
+            </fieldset>
+        </div>
+
+        <div class="container" id="ligand-geometry-edit">
+            <fieldset>
+                <legend>Ligand Geometry (in-place)</legend>
+                <div class="form-group input-with-button">
+                    <label for="ligandGeomSource">Tracked SDF Ligand:</label>
+                    <select id="ligandGeomSource" name="ligandGeomSource" onchange="onLigandGeomSourceChange()">
+                        <option value="">— Select a tracked ligand —</option>
+                    </select>
+                </div>
+
+                <!-- Flick through exported torsion minima -->
+                <div id="ligandTorsionPanel">
+                    <div class="ligand-torsion-header">
+                        <label style="font-weight: bold;">Rotatable-bond minima</label>
+                        <button type="button" class="tracked-action-button" onclick="exportLigandTorsions()">Export torsions</button>
+                    </div>
+                    <div id="ligandTorsionStatus" class="torsion-empty"></div>
+                    <ul id="ligandTorsionList"></ul>
+                    <div id="ligandTorsionProfileContainer"></div>
+                </div>
+
+                <!-- Change isomers (E/Z and R/S) -->
+                <div id="ligandIsomerPanel">
+                    <label style="font-weight: bold;">Stereochemistry</label>
+                    <ul id="ligandDoubleBondList"></ul>
+                    <ul id="ligandChiralList"></ul>
+                    <div id="ligandIsomerStatus" class="torsion-empty"></div>
+                </div>
+            </fieldset>
+        </div>
+
         <div class="container" id="ligandcontent">
             <legend>Protonate Ligands</legend>
                 
@@ -126,6 +176,13 @@
                     <label for="pHSTD">pKa Precision:</label>
                     <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" style="width: 100px;">
                 </div>
+                <!-- Source selector: a tracked SDF ligand OR the typed SMILES below -->
+                <div class="form-group input-with-button">
+                    <label for="protonationSource">Tracked SDF Ligand:</label>
+                    <select id="protonationSource" name="protonationSource">
+                        <option value="">— Use typed SMILES below —</option>
+                    </select>
+                </div>
                 <!-- Ligand SMILES input with Add button -->
                 <div class="form-group input-with-button">
                     <label for="ligandSmilesForProtonation">Ligand SMILES:</label>
@@ -134,17 +191,7 @@
                 </div>
                 
         </div>
-        
-        <div class="container" id="chemical-structure">
-            
-            <fieldset>
-            
-                <legend>Chemical Structure</legend>
-                
-            
-            </fieldset>
-        </div>
-        
+
         <div class="container" id="protonation-states">
         <fieldset>
             <legend>Protonation States</legend>
@@ -175,7 +222,38 @@
          
          <div class="container" id="add-solvent-molecules">
             <fieldset>
-            <legend>Insert Solvent Molecules</legend>
+            <legend>Place Solvent / Ions</legend>
+                <p style="margin:4px 0; color:#555; font-size:0.9em;">
+                    Pick a species, then right-click on the model or map surface to place it exactly where you click.
+                </p>
+                <div class="form-group">
+                    <label for="solventSpeciesSelect">Species:</label>
+                    <select id="solventSpeciesSelect" onchange="onSolventSpeciesChange()">
+                        <optgroup label="Water">
+                            <option value="HOH">Water (HOH)</option>
+                        </optgroup>
+                        <optgroup label="Ions">
+                            <option value="NA">Na</option>
+                            <option value="K">K</option>
+                            <option value="CL">Cl</option>
+                            <option value="CA">Ca</option>
+                            <option value="MG">Mg</option>
+                            <option value="ZN">Zn</option>
+                            <option value="MN">Mn</option>
+                            <option value="FE">Fe (3+)</option>
+                            <option value="FE2">Fe (2+)</option>
+                            <option value="LI">Li</option>
+                        </optgroup>
+                        <optgroup label="Anions">
+                            <option value="SO4">Sulfate (SO4)</option>
+                            <option value="PO4">Phosphate (PO4)</option>
+                            <option value="NO3">Nitrate (NO3)</option>
+                            <option value="CO3">Carbonate (CO3)</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <button type="button" id="solventPlacementToggle" onclick="toggleSolventPlacement()">Enable Solvent Placement</button>
+                <div id="addSolventStatus" style="margin-top:10px; color:#555; font-size:0.95em;"></div>
              </fieldset>
          </div>
 
@@ -207,23 +285,147 @@
     </div> <!-- end of tab-->
     
     <div id="MaskTab" class="tabcontent">
-       
+
         <div class="container" id="ligand-masking-container">
           <fieldset>
-            <legend>Ligand density masking</legend>
-            
-            <select id="protocolDropdown" onchange="handleProtocolChange()">
-              <option value="alpha-mask">Alpha Mask</option>
-              <option value="significant-features">Significant Features Mask</option>
+            <legend>Alpha Mask (ligand density segmentation)</legend>
+
+            <!-- ===== Core options ===== -->
+            <label for="maskSurface">Masking surface:</label>
+            <select id="maskSurface" name="maskSurface">
+              <option value="alpha">Alpha-spheres (default)</option>
+              <option value="ses">Solvent-excluded surface (SES)</option>
             </select>
-            
-            <!-- Add the mask specifc options herer TODO! -->
-            
-            <button type="button" onclick="runAutoMask()">Run</button>
+
+            <label for="maskSegmentMode">Segmentation mode:</label>
+            <select id="maskSegmentMode" name="maskSegmentMode" onchange="updateMaskModeVisibility()">
+              <option value="gradient">Gradient (default)</option>
+              <option value="otsu-segment">Otsu</option>
+              <option value="hysteresis-segment">Hysteresis</option>
+              <option value="random-walker-segment">Random walker</option>
+            </select>
+
+            <label for="maskOutputMode">Output mode:</label>
+            <select id="maskOutputMode" name="maskOutputMode" onchange="updateMaskModeVisibility()">
+              <option value="global">Global features (default)</option>
+              <option value="segment-binding-sites">Per binding site</option>
+              <option value="alpha-feature-sites">Each feature as a site</option>
+            </select>
+
+            <label for="maskAlphaPad">Alpha pad (Å):</label>
+            <input type="number" id="maskAlphaPad" name="maskAlphaPad" step="0.5" placeholder="E.g.: 8.0">
+
+            <!-- ===== Advanced options ===== -->
+            <div class="container" id="mask-advanced-options">
+              <fieldset>
+                <legend>
+                  <span class="toggle-arrow" onclick="toggleMaskAdvancedOptions()">Advanced Options &#9660;</span>
+                </legend>
+
+                <div class="collapse" id="maskAdvancedOptionsContent">
+
+                  <!-- Geometry -->
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      Skip boundary distance weighting (--no-boundry)
+                      <input type="checkbox" id="maskNoBoundry" name="maskNoBoundry">
+                      <span class="checkmark"></span>
+                    </label>
+                  </div>
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      Disable Otsu smoothing of SES mask (--no-otsu-filter-ses-mask)
+                      <input type="checkbox" id="maskNoOtsuFilterSes" name="maskNoOtsuFilterSes">
+                      <span class="checkmark"></span>
+                    </label>
+                  </div>
+
+                  <!-- Segmentation tuning -->
+                  <label for="maskGradThr">Gradient threshold (--grad-thr):</label>
+                  <input type="number" id="maskGradThr" name="maskGradThr" step="0.05" placeholder="E.g.: 0.4">
+
+                  <label for="maskSigmaCoeff">Sigma coefficient (--sigma-coeff):</label>
+                  <input type="number" id="maskSigmaCoeff" name="maskSigmaCoeff" step="0.01" placeholder="E.g.: 0.356">
+
+                  <!-- Hysteresis-specific -->
+                  <div id="maskHystGroup">
+                    <label for="maskHystLowK">Hysteresis low-K (--hyst-low-k):</label>
+                    <input type="number" id="maskHystLowK" name="maskHystLowK" step="0.1" placeholder="E.g.: 2.0">
+
+                    <label for="maskHystLowSigma">Hysteresis fallback sigma (--hyst-low-sigma-fallback):</label>
+                    <input type="number" id="maskHystLowSigma" name="maskHystLowSigma" step="0.1" placeholder="E.g.: 1.0">
+                  </div>
+
+                  <!-- Random-walker-specific -->
+                  <div id="maskRwGroup">
+                    <label for="maskRwBeta">RW beta (--rw-beta):</label>
+                    <input type="number" id="maskRwBeta" name="maskRwBeta" step="10" placeholder="E.g.: 130">
+
+                    <label for="maskRwProbThreshold">RW probability threshold (--rw-prob-threshold):</label>
+                    <input type="number" id="maskRwProbThreshold" name="maskRwProbThreshold" step="0.05" placeholder="E.g.: 0.5">
+
+                    <label for="maskRwBgSigmaK">RW background sigma-K (--rw-bg-sigma-k):</label>
+                    <input type="number" id="maskRwBgSigmaK" name="maskRwBgSigmaK" step="0.5" placeholder="E.g.: 0.0">
+
+                    <label for="maskRwMode">RW solver (--rw-mode):</label>
+                    <select id="maskRwMode" name="maskRwMode">
+                      <option value="">cg_j (default)</option>
+                      <option value="cg">cg</option>
+                      <option value="cg_mg">cg_mg</option>
+                      <option value="bf">bf</option>
+                    </select>
+                  </div>
+
+                  <!-- Feature filters -->
+                  <label for="maskSfAmpFrac">Feature amplitude fraction (--sf-amp-frac):</label>
+                  <input type="number" id="maskSfAmpFrac" name="maskSfAmpFrac" step="0.05" placeholder="E.g.: 0.8">
+
+                  <label for="maskSfVolumeThr">Min feature volume Å³ (--sf-volume-thr):</label>
+                  <input type="number" id="maskSfVolumeThr" name="maskSfVolumeThr" step="1.0" placeholder="E.g.: 15.0">
+
+                  <label for="maskSfCentroidThr">Centroid distance threshold Å (--sf-centroid-thr):</label>
+                  <input type="number" id="maskSfCentroidThr" name="maskSfCentroidThr" step="0.1" placeholder="E.g.: 2.1">
+
+                  <label for="maskSfSigmaThr">Sigma threshold (--sf-sigma-thr):</label>
+                  <input type="number" id="maskSfSigmaThr" name="maskSfSigmaThr" step="0.1" placeholder="E.g.: 2.0">
+
+                  <!-- Feature separation -->
+                  <div class="form-group">
+                    <label class="checkbox-label">
+                      Separate features by distance (--sep-features)
+                      <input type="checkbox" id="maskSepFeatures" name="maskSepFeatures">
+                      <span class="checkmark"></span>
+                    </label>
+                  </div>
+                  <label for="maskSepFeaturesDist">Feature separation distance Å (--sep-features-dist):</label>
+                  <input type="number" id="maskSepFeaturesDist" name="maskSepFeaturesDist" step="0.5" placeholder="E.g.: 4.0">
+
+                  <label for="maskSepFeaturesMode">Feature distance mode (--sepf-features-mode):</label>
+                  <select id="maskSepFeaturesMode" name="maskSepFeaturesMode">
+                    <option value="">voxels (default)</option>
+                    <option value="com">com</option>
+                  </select>
+
+                  <!-- Alpha-feature-as-site mode -->
+                  <div id="maskFeatureSiteGroup">
+                    <label for="maskFeatureSiteRadius">Feature site radius Å (--feature-site-radius):</label>
+                    <input type="number" id="maskFeatureSiteRadius" name="maskFeatureSiteRadius" step="0.5" placeholder="E.g.: 6.0">
+
+                    <label for="maskFeatureResidueDilation">Lining residue dilation Å (--feature-residue-dilation):</label>
+                    <input type="number" id="maskFeatureResidueDilation" name="maskFeatureResidueDilation" step="0.5" placeholder="E.g.: 6.0">
+
+                    <label for="maskFeatureAcoDilation">ACO mask dilation Å (--feature-aco-dilation):</label>
+                    <input type="number" id="maskFeatureAcoDilation" name="maskFeatureAcoDilation" step="0.5" placeholder="E.g.: 0.0">
+                  </div>
+
+                </div><!-- end of advanced options -->
+              </fieldset>
+            </div><!-- end of advanced options container -->
+
+            <button type="button" onclick="runAlphaMask()">Run</button>
           </fieldset>
         </div>
-    
-    
+
     </div> <!-- end of tab-->
     
     <div id="DockTab" class="tabcontent">
@@ -330,22 +532,216 @@
             </fieldset> 
         </div>
         
-        <div class="container" id="jobcontent">
-            <legend>Submitted Jobs</legend>
-            <div id="jobListContainer">
-                <ul id="jobList"></ul>
-            </div>
-        </div>
-        
         <div class="container" id="dockResultsContainer">
             <legend>Docking Results</legend>
             <div id="dockResults" class="scrollable"></div>
         </div>
-        
-    </div> <!-- end of tab -->
-    
 
-   
+    </div> <!-- end of tab -->
+
+
+    <div id="RefineTab" class="tabcontent">
+
+        <!-- Poses to refine: drawn from tracked ligands + docked solutions -->
+        <div class="container" id="refine-poses-container">
+            <fieldset>
+                <legend>Poses to Refine</legend>
+                <button type="button" onclick="sendSiteValueToBackend('chemem:GetRefinePoses', 'None')">Refresh</button>
+                <div id="refinePosePicker" class="scrollable"></div>
+            </fieldset>
+        </div>
+
+        <div class="container" id="refine-options-container">
+            <fieldset>
+                <legend>Refine</legend>
+
+                <label for="refineMethod">Method:</label>
+                <select id="refineMethod" onchange="updateRefineMethodVisibility()">
+                    <option value="smart-ligand-refine2" selected>SmartRefine2 (torsion search)</option>
+                    <option value="refine">MD Refine (minimise / anneal)</option>
+                </select>
+
+                <!-- ===================== SmartRefine2 controls ===================== -->
+                <div id="refineSlr2Block">
+                    <label for="refineOptScore">Optimisation Score:</label>
+                    <select id="refineOptScore">
+                        <option value="qscore" selected>Q-score</option>
+                        <option value="ccc">CCC</option>
+                        <option value="mi">Mutual Information</option>
+                        <option value="sci">SCI</option>
+                    </select>
+
+                    <label for="refineAccScore">Acceptance Score:</label>
+                    <select id="refineAccScore">
+                        <option value="qscore" selected>Q-score</option>
+                        <option value="ccc">CCC</option>
+                        <option value="mi">Mutual Information</option>
+                        <option value="sci">SCI</option>
+                    </select>
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Final Minimise
+                            <input type="checkbox" id="refineFinalMinimise" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Tail-aware search
+                            <input type="checkbox" id="refineTailAware" checked>
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Robust (bundle)
+                            <input type="checkbox" id="refineRobust">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+
+                    <div class="container" id="refine-slr2-advanced">
+                        <fieldset>
+                            <legend>
+                                <span class="toggle-arrow" onclick="toggleRefineAdvanced('refineSlr2Advanced', 'refine-slr2-advanced')">Advanced Options &#9660;</span>
+                            </legend>
+                            <div class="collapse" id="refineSlr2Advanced">
+                                <label for="refineMinimiser">Minimiser:</label>
+                                <select id="refineMinimiser">
+                                    <option value="standard" selected>Standard</option>
+                                    <option value="fragment">Fragment</option>
+                                </select>
+
+                                <label for="refineSelection">Selection:</label>
+                                <select id="refineSelection">
+                                    <option value="greedy" selected>Greedy</option>
+                                    <option value="branches">Branches</option>
+                                </select>
+
+                                <label for="refineFreezeBlockQ">Freeze block Q-score:</label>
+                                <input type="number" id="refineFreezeBlockQ" step="0.05" placeholder="E.g.: 0.7">
+
+                                <label for="refineBranchStep">Branch coarse step (deg):</label>
+                                <input type="number" id="refineBranchStep" step="1.0" placeholder="E.g.: 15.0">
+
+                                <label for="refineCandidateDirs">Q-score candidate dirs:</label>
+                                <input type="number" id="refineCandidateDirs" step="1" placeholder="E.g.: 128">
+
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        Pre-minimise
+                                        <input type="checkbox" id="refinePreMinimiseSlr2">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        Disable all polish (no-polish)
+                                        <input type="checkbox" id="refineNoPolish">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </fieldset>
+                    </div>
+                </div><!-- end SmartRefine2 controls -->
+
+                <!-- ===================== MD Refine controls ===================== -->
+                <div id="refineMdBlock" style="display:none;">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Local refine
+                            <input type="checkbox" id="refineLocal">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+                    <label for="refineLocalRadius">Local radius (&#8491;):</label>
+                    <input type="number" id="refineLocalRadius" step="0.5" placeholder="E.g.: 12.0">
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            Simulated annealing
+                            <input type="checkbox" id="refineAnnealing">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+
+                    <label for="refineGlobalK">Map force constant:</label>
+                    <input type="number" id="refineGlobalK" step="1.0" placeholder="E.g.: 75.0">
+
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            COM restraint
+                            <input type="checkbox" id="refineComRestraint">
+                            <span class="checkmark"></span>
+                        </label>
+                    </div>
+
+                    <div class="container" id="refine-md-advanced">
+                        <fieldset>
+                            <legend>
+                                <span class="toggle-arrow" onclick="toggleRefineAdvanced('refineMdAdvanced', 'refine-md-advanced')">Advanced Options &#9660;</span>
+                            </legend>
+                            <div class="collapse" id="refineMdAdvanced">
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        Pre-minimise
+                                        <input type="checkbox" id="refinePreMinimiseMd">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                </div>
+                                <div class="form-group">
+                                    <label class="checkbox-label">
+                                        Post-minimise
+                                        <input type="checkbox" id="refinePostMinimiseMd">
+                                        <span class="checkmark"></span>
+                                    </label>
+                                </div>
+
+                                <label for="refineBaseTemp">Base temperature (K):</label>
+                                <input type="number" id="refineBaseTemp" step="1.0" placeholder="E.g.: 50.0">
+
+                                <label for="refineHeatToK">Heat to (K):</label>
+                                <input type="number" id="refineHeatToK" step="1.0" placeholder="E.g.: 150.0">
+
+                                <label for="refineTempStepK">Temperature step (K):</label>
+                                <input type="number" id="refineTempStepK" step="1.0" placeholder="E.g.: 5.0">
+
+                                <label for="refineStepsPerTemp">Steps per temperature:</label>
+                                <input type="number" id="refineStepsPerTemp" step="1" placeholder="E.g.: 25">
+
+                                <label for="refineHighHoldPs">High-temp hold (ps):</label>
+                                <input type="number" id="refineHighHoldPs" step="0.1" placeholder="E.g.: 0.0">
+
+                                <label for="refineCycles">Cycles:</label>
+                                <input type="number" id="refineCycles" step="1" placeholder="E.g.: 1">
+
+                                <label for="refineSeed">Seed:</label>
+                                <input type="number" id="refineSeed" step="1" placeholder="E.g.: 1">
+
+                                <label for="refineComDist">COM restraint distance (&#8491;):</label>
+                                <input type="number" id="refineComDist" step="0.1" placeholder="E.g.: 2.0">
+
+                                <label for="refineComKcal">COM restraint (kcal/mol):</label>
+                                <input type="number" id="refineComKcal" step="1.0" placeholder="E.g.: 20.0">
+                            </div>
+                        </fieldset>
+                    </div>
+                </div><!-- end MD Refine controls -->
+
+                <button type="button" onclick="runRefine()">Run</button>
+            </fieldset>
+        </div>
+
+        <div class="container" id="refineResultsContainer">
+            <legend>Refinement Results</legend>
+            <div id="refineResults" class="scrollable"></div>
+        </div>
+
+    </div> <!-- end of RefineTab -->
+
+
     <div id="BuildTab" class="tabcontent">
         <div class="container" id="BuildSimulationContent">
             <legend>Simulation Builder</legend> 
@@ -378,31 +774,17 @@
             
             
             
-            <legend>Add Ligand To Simulation</legend> 
-            <!-- Ligand File input with Add button -->
-            <div class="form-group input-with-button">
-                <label for="ligandSmiles">Ligand SMILES:</label>
-                <input type="text" id="ligandSimulationSmiles" name="ligandSimulationSmiles" placeholder="E.g., CC(C)NC[C@@H](c1ccc(c(c1)O)O)O">
-                <button type="button" class="add-button" onclick="addLigandToSmiulation()">Add</button>
+            <legend>Add Ligand To Simulation</legend>
+            <p class="ligand-picker-hint">Load ligands via Setup &gt; Ligand File or add a docked solution; they appear below.</p>
+            <div class="form-group">
+                <label>Available Tracked Ligands:</label>
+                <ul id="simulationLigandPicker"></ul>
             </div>
-            
-            
-            <div class="form-group input-with-button">
-                
-                <label for="ligandFile">Ligand File:</label>
-                <!--<input type="file" id="ligandFile" name="ligandFile">-->
-                <div class="form-group file-input-group">
-                
-                    <button type="button" class="dialog-button" id="ligandSimulationFile" onclick="readFile('ligandSimulationFilePath')">Choose File</button>
-                    <span class="file-path" id="ligandSimulationFilePath"></span>
-                </div>
-                <button type="button" class="add-button" onclick="addLigandFileToSimulation()">Add</button>
+
+            <div class="form-group">
+                <label>Ligands in Simulation:</label>
+                <ul id="ligandSimulationList"></ul>
             </div>
-            
-           <div class="form-group">
-              <label>Ligands in Simulation:</label>
-              <ul id="ligandSimulationList"></ul>
-          </div>
 
         </div>
         
@@ -529,27 +911,116 @@
             <button id="RunSimulationButton" onclick="handleRunClick()">Run</button>
             <button id="PauseSimulationButton" onclick="handlePauseClick()" style="display:none;">Pause</button>
             
-            <button id="StopSimulationButton" onclick="stopSimulation()">Stop</button> 
-            <button id="SaveSimulationButton">Save</button> 
-            <button id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button> 
+            <button id="StopSimulationButton" onclick="stopSimulation()">Stop</button>
+            <button id="SaveSimulationButton" onclick="saveSimulationSnapshot()">Save</button>
+            <button id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button>
             <button id="AddCovelentLigand" onclick="AddCovelentLigandToSimulation()">Add Covelent Ligand</button>
 
             <!-- undo -->
+            <div id="simulationStatus" class="sim-status"></div>
         </div>
-        
+
         <div class="container" id="preprocResultsContent">
             <legend>Active Restraints</legend>
             <div id="activeRestraintsContainer">
                 <ul id="activeRestraints"></ul>
             </div>
         </div>
-        
-        
+
+        <!-- Save points (Feature 1) -->
+        <div class="container" id="savePointsContent">
+            <legend>Save Points</legend>
+            <div id="savePointsContainer">
+                <ul id="savePointsList"></ul>
+            </div>
+        </div>
+
+        <!-- Torsion preferences (Feature 2) -->
+        <div class="container" id="torsionPanel">
+            <legend>Torsion Preferences</legend>
+            <div class="torsion-controls">
+                <button id="useTorsionSelectionButton" onclick="syncSelectedTorsions()">Use selection</button>
+                <button id="colourTorsionLocalButton" onclick="applyTorsionColor('local')">Colour: local</button>
+                <button id="colourTorsionGlobalButton" onclick="applyTorsionColor('global')">Colour: global</button>
+                <button id="clearTorsionColourButton" onclick="clearTorsionColor()">Clear colour</button>
+            </div>
+            <ul id="selectedTorsionList"></ul>
+            <div id="torsionProfileContainer"></div>
+        </div>
+
+
     </div><!-- end of tab -->
-    
-    
-    
-    
+
+    <div id="ScoreTab" class="tabcontent">
+        <div class="container" id="scorecontent">
+            <fieldset>
+                <legend>Score Ligands</legend>
+                <p class="score-help">
+                    Score any pose from the pipeline (tracked, docked, refined, or
+                    in a running simulation) against the current map. Map scores are
+                    instant; MMGBSA is slower and runs in the background.
+                </p>
+
+                <div class="score-controls">
+                    <button type="button" onclick="refreshScoreTargets()">Refresh ligands</button>
+                </div>
+
+                <div class="score-section-header">Ligands</div>
+                <div id="scoreTargetPicker" class="score-picker">
+                    No ligands yet - click "Refresh ligands".
+                </div>
+
+                <div class="score-section-header">Scores</div>
+                <div id="scoreCheckboxes" class="score-checkboxes">
+                    <label class="checkbox-label">CCC
+                        <input type="checkbox" class="score-metric" value="ccc" checked>
+                        <span class="checkmark"></span>
+                    </label>
+                    <label class="checkbox-label">MI
+                        <input type="checkbox" class="score-metric" value="mi" checked>
+                        <span class="checkmark"></span>
+                    </label>
+                    <label class="checkbox-label">SCI
+                        <input type="checkbox" class="score-metric" value="sci" checked>
+                        <span class="checkmark"></span>
+                    </label>
+                    <label class="checkbox-label">QScore
+                        <input type="checkbox" class="score-metric" value="qscore" checked>
+                        <span class="checkmark"></span>
+                    </label>
+                </div>
+
+                <div class="score-controls">
+                    <button type="button" onclick="runMapScores()">Score selected</button>
+                    <button type="button" onclick="scoreCurrentSelection()">Score current selection</button>
+                    <button type="button" onclick="runMMGBSA()" title="Slow - needs an active simulation containing the ligand">Run MMGBSA (slow)</button>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Comparison</legend>
+                <div class="score-controls">
+                    <button type="button" onclick="exportScores()">Export CSV</button>
+                    <button type="button" onclick="clearScoreTable()">Clear table</button>
+                </div>
+                <div id="scoreTableContainer" class="score-table-container">
+                    No scores yet.
+                </div>
+            </fieldset>
+        </div>
+    </div><!-- end of tab -->
+
+    <div id="JobsTab" class="tabcontent">
+        <div class="container" id="jobcontent">
+            <legend>Jobs</legend>
+            <div id="jobListContainer">
+                <ul id="jobList"></ul>
+            </div>
+        </div>
+    </div><!-- end of tab -->
+
+
+
     <script>
     
     function openTab(evt, tabName) {
@@ -564,18 +1035,30 @@
       // show selected pane + activate button
       document.getElementById(tabName).style.display = "block";
       if (evt && evt.currentTarget) evt.currentTarget.classList.add("active");
+
+      if (tabName === "LigandsTab") {
+        refreshTrackedLigands();
+      }
+      if (tabName === "RefineTab") {
+        sendSiteValueToBackend("chemem:GetRefinePoses", "None");
+      }
+      if (tabName === "ScoreTab") {
+        refreshScoreTargets();
+      }
     }
     
     // open the default tab on load
     window.addEventListener("DOMContentLoaded", () => {
       const def = document.getElementById("defaultOpen");
-      if (def) def.click();  
+      if (def) def.click();
+      if (typeof updateMaskModeVisibility === "function") updateMaskModeVisibility();
+      if (typeof updateRefineMethodVisibility === "function") updateRefineMethodVisibility();
     });
     
     
     function toggleAdvancedOptions() {
         var content = document.getElementById("advancedOptionsContent");
-        var arrow = document.querySelector(".toggle-arrow");
+        var arrow = document.querySelector("#advanced-options .toggle-arrow");
         if (content.style.display === "none" || content.style.display === "") {
             content.style.display = "block";
             arrow.innerHTML = "Advanced Options &#9650;"; // Arrow pointing up
@@ -609,6 +1092,175 @@
         };
         sendSiteValueToBackend(command, data);
     }
+
+    // ---------------- Score tab ----------------
+    function refreshScoreTargets() {
+        sendSiteValueToBackend("chemem:RefreshScoreTargets", "None");
+    }
+
+    function renderScoreTargets(targets) {
+        const root = document.getElementById("scoreTargetPicker");
+        if (!root) return;
+        root.innerHTML = "";
+
+        if (!Array.isArray(targets) || targets.length === 0) {
+            root.textContent = "No ligands available. Load a ligand, run a Dock/Refine job, or build a simulation.";
+            return;
+        }
+
+        const groups = { tracked: "Tracked ligands", docked: "Docked solutions",
+                         refined: "Refined solutions", simulation: "In simulation" };
+        Object.keys(groups).forEach((src) => {
+            const items = targets.filter((t) => t.source === src);
+            if (items.length === 0) return;
+
+            const hdr = document.createElement("div");
+            hdr.className = "dir-header";
+            hdr.textContent = groups[src];
+            root.appendChild(hdr);
+
+            items.forEach((t) => {
+                const label = document.createElement("label");
+                label.className = "checkbox-label";
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.className = "score-target-checkbox";
+                cb.dataset.key = t.key;
+                cb.dataset.source = t.source;
+                cb.dataset.canMmgbsa = t.can_mmgbsa ? "1" : "0";
+                if (!t.valid) cb.disabled = true;
+                const mark = document.createElement("span");
+                mark.className = "checkmark";
+                const span = document.createElement("span");
+                const count = (t.n_atoms ? `  (${t.n_atoms} atoms)` : "");
+                span.textContent = `${t.display_name}${count}${t.valid ? "" : "  [unreadable]"}`;
+                label.appendChild(cb);
+                label.appendChild(mark);
+                label.appendChild(span);
+                root.appendChild(label);
+            });
+        });
+    }
+
+    function getSelectedScores() {
+        const scores = [];
+        document.querySelectorAll("#scoreCheckboxes .score-metric").forEach((cb) => {
+            if (cb.checked) scores.push(cb.value);
+        });
+        return scores;
+    }
+
+    function getSelectedTargetKeys() {
+        const keys = [];
+        document.querySelectorAll("#scoreTargetPicker .score-target-checkbox").forEach((cb) => {
+            if (cb.checked) keys.push(cb.dataset.key);
+        });
+        return keys;
+    }
+
+    function runMapScores() {
+        const keys = getSelectedTargetKeys();
+        if (keys.length === 0) { alert("Select at least one ligand to score."); return; }
+        const scores = getSelectedScores();
+        if (scores.length === 0) { alert("Select at least one score to compute."); return; }
+        const payload = JSON.stringify({ keys: keys, scores: scores });
+        sendParameterToBackend("chemem:RunMapScores", "scoreReq", payload, "StringParameter");
+    }
+
+    function scoreCurrentSelection() {
+        const scores = getSelectedScores();
+        if (scores.length === 0) { alert("Select at least one score to compute."); return; }
+        const payload = JSON.stringify({ scores: scores });
+        sendParameterToBackend("chemem:ScoreCurrentSelection", "scoreReq", payload, "StringParameter");
+    }
+
+    function runMMGBSA() {
+        // selected sim ligands (if none selected, the backend defaults to all sim rows)
+        const keys = [];
+        document.querySelectorAll("#scoreTargetPicker .score-target-checkbox").forEach((cb) => {
+            if (cb.checked && cb.dataset.canMmgbsa === "1") keys.push(cb.dataset.key);
+        });
+        const payload = JSON.stringify({ keys: keys });
+        sendParameterToBackend("chemem:RunMMGBSA", "scoreReq", payload, "StringParameter");
+    }
+
+    function exportScores() {
+        sendSiteValueToBackend("chemem:ExportScores", "None");
+    }
+
+    function clearScoreTable() {
+        sendSiteValueToBackend("chemem:ClearScoreTable", "None");
+    }
+
+    const SCORE_COLUMN_LABELS = {
+        ccc: "CCC", mi: "MI", sci: "SCI", qscore_mean: "QScore", qscore_min: "QScore(min)",
+        mmgbsa_dG: "MMGBSA ΔG", EEL: "EEL", VDW: "VDW", EGB: "EGB", ECAV: "ECAV"
+    };
+
+    let scoreSortState = { column: null, dir: 1 };
+
+    function renderScoreTable(data) {
+        const root = document.getElementById("scoreTableContainer");
+        if (!root) return;
+        root.innerHTML = "";
+
+        const columns = (data && Array.isArray(data.columns)) ? data.columns : [];
+        let rows = (data && Array.isArray(data.rows)) ? data.rows.slice() : [];
+        if (rows.length === 0) { root.textContent = "No scores yet."; return; }
+
+        if (scoreSortState.column) {
+            const c = scoreSortState.column, d = scoreSortState.dir;
+            rows.sort((a, b) => {
+                const va = a[c], vb = b[c];
+                const na = (typeof va === "number"), nb = (typeof vb === "number");
+                if (na && nb) return (va - vb) * d;
+                if (na) return -1; if (nb) return 1;
+                return String(va || "").localeCompare(String(vb || "")) * d;
+            });
+        }
+
+        const table = document.createElement("table");
+        table.className = "score-table";
+
+        const thead = document.createElement("thead");
+        const htr = document.createElement("tr");
+        const makeTh = (key, label) => {
+            const th = document.createElement("th");
+            th.textContent = label + (scoreSortState.column === key ? (scoreSortState.dir > 0 ? " ▲" : " ▼") : "");
+            th.style.cursor = "pointer";
+            th.onclick = () => {
+                if (scoreSortState.column === key) scoreSortState.dir *= -1;
+                else { scoreSortState.column = key; scoreSortState.dir = 1; }
+                renderScoreTable(data);
+            };
+            return th;
+        };
+        htr.appendChild(makeTh("name", "Ligand"));
+        htr.appendChild(makeTh("source", "Source"));
+        columns.forEach((c) => htr.appendChild(makeTh(c, SCORE_COLUMN_LABELS[c] || c)));
+        thead.appendChild(htr);
+        table.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        rows.forEach((row) => {
+            const tr = document.createElement("tr");
+            const nameTd = document.createElement("td");
+            nameTd.textContent = row.name || row.key || "";
+            tr.appendChild(nameTd);
+            const srcTd = document.createElement("td");
+            srcTd.textContent = row.source || "";
+            tr.appendChild(srcTd);
+            columns.forEach((c) => {
+                const td = document.createElement("td");
+                const v = row[c];
+                td.textContent = (v === undefined || v === null) ? "" : v;
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        root.appendChild(table);
+    }
     
      function setDir(dir) {
          
@@ -618,6 +1270,11 @@
      
      function setFilePath( elementId, file){
          document.getElementById(elementId).textContent = file;
+     }
+
+     function setLigandDropActive(active) {
+         const z = document.getElementById("ligandDropZone");
+         if (z) z.classList.toggle("drag-over", !!active);
      }
      
      
@@ -1149,7 +1806,37 @@
         container.appendChild(svg);
     }
 
+
     function runAddIonFromUI() {
+        sendParameterToBackend("chemem:AddIonSiteParameter", "ion-fixer", "protocol", "StringParameter");
+    
+        var ionSelect = document.getElementById("ionTypeSelect").value;
+        sendParameterToBackend("chemem:AddIonSiteParameter", "ion-type", ionSelect, "StringParameter");
+
+        var geomSelect = document.getElementById("coordGeomSelect").value;
+        sendParameterToBackend("chemem:AddIonSiteParameter", "coordination-geometry", geomSelect, "StringParameter");
+
+        const coordinatingAtoms = getCurrentIonCoordAtoms(geomSelect);
+
+        for (const atomString of coordinatingAtoms) {
+            //don't send dummy water placeholders
+            if (!atomString || atomString.startsWith("dWat")) continue;
+
+            sendParameterToBackend(
+                "chemem:AddIonSiteListParameter",
+                "atom-spec",
+                atomString,
+                "StringParameter"
+            );
+        }
+        
+        //need to add exclude-atoms or pin-atoms
+        sendSiteValueToBackend("chemem:RunIonFixer", "None");
+        
+
+    }
+
+    function runAddIonFromUI__() {
         const ionSelect = document.getElementById("ionTypeSelect");
         const geomSelect = document.getElementById("coordGeomSelect");
 
@@ -1207,6 +1894,149 @@
         initIonCoordAssignmentsForGeometry(geomSelect.value);
         renderIonGeometrySketch();
         setAddIonStatus("Select one atom in ChimeraX, then click a dWat site to assign it.");
+    }
+
+    //-------tracked sdf ligands-------
+    function refreshTrackedLigands() {
+        sendSiteValueToBackend("chemem:GetTrackedLigands", "None");
+    }
+
+    function showTrackedLigandStatus(message, level = "info") {
+        const status = document.getElementById("trackedLigandStatus");
+        if (!status) return;
+
+        status.textContent = message || "";
+        status.classList.remove("success", "error", "info");
+        status.classList.add(level || "info");
+    }
+
+    function viewTrackedLigand(ligandId) {
+        sendSiteValueToBackend("chemem:ViewTrackedLigand", ligandId);
+    }
+
+    function saveTrackedLigand(entry) {
+        if (!entry || !entry.ligand_id) return;
+
+        if (!entry.last_saved_path && entry.source_sdf_path) {
+            const ok = window.confirm(
+                `Save will overwrite the original source file:\n${entry.source_sdf_path}\n\nContinue?`
+            );
+            if (!ok) return;
+        }
+
+        showTrackedLigandStatus("Saving tracked ligand...", "info");
+        sendSiteValueToBackend("chemem:SaveTrackedLigandSdf", entry.ligand_id);
+    }
+
+    function saveTrackedLigandAs(ligandId) {
+        showTrackedLigandStatus("Choose a destination folder to save the moved SDF.", "info");
+        sendSiteValueToBackend("chemem:SaveTrackedLigandSdfAs", ligandId);
+    }
+
+    function populateProtonationSource(entries) {
+        const select = document.getElementById("protonationSource");
+        if (!select) return;
+
+        const previous = select.value;
+        select.innerHTML = "";
+
+        const defaultOpt = document.createElement("option");
+        defaultOpt.value = "";
+        defaultOpt.textContent = "— Use typed SMILES below —";
+        select.appendChild(defaultOpt);
+
+        entries.forEach((entry) => {
+            const opt = document.createElement("option");
+            opt.value = entry.ligand_id;
+            opt.textContent = entry.display_name || entry.model_name || `Ligand ${entry.ligand_id}`;
+            select.appendChild(opt);
+        });
+
+        // Restore the prior selection if it still exists.
+        if (previous && entries.some((e) => String(e.ligand_id) === String(previous))) {
+            select.value = previous;
+        }
+    }
+
+    function renderTrackedLigands(ligands) {
+        const list = document.getElementById("trackedLigandList");
+        if (!list) return;
+
+        list.innerHTML = "";
+        const entries = Array.isArray(ligands) ? ligands : [];
+
+        populateProtonationSource(entries);
+        populateLigandGeomSource(entries);
+
+        if (entries.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "tracked-empty";
+            empty.textContent = "No tracked SDF ligands loaded yet. Add one from Setup > Ligand File.";
+            list.appendChild(empty);
+            return;
+        }
+
+        entries.forEach((entry) => {
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+            if (entry.dirty) {
+                li.classList.add("is-dirty");
+            }
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = entry.display_name || entry.model_name || "Tracked ligand";
+            main.appendChild(title);
+
+            const meta = document.createElement("div");
+            meta.className = "tracked-ligand-meta";
+            const modelPart = entry.model_id ? `Model #${entry.model_id}` : "Model unavailable";
+            const pathPart = entry.last_saved_path
+                ? `Last saved: ${entry.last_saved_path}`
+                : `Source: ${entry.source_sdf_path || "unknown"}`;
+            meta.textContent = `${modelPart} | ${pathPart}`;
+            main.appendChild(meta);
+
+            const chip = document.createElement("span");
+            chip.className = `tracked-status-chip ${entry.dirty ? "dirty" : "clean"}`;
+            chip.textContent = entry.dirty ? "Moved" : "Saved";
+            main.appendChild(chip);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+
+            const viewBtn = document.createElement("button");
+            viewBtn.className = "tracked-action-button secondary";
+            viewBtn.textContent = "View";
+            viewBtn.onclick = function() {
+                viewTrackedLigand(entry.ligand_id);
+            };
+
+            const saveBtn = document.createElement("button");
+            saveBtn.className = "tracked-action-button";
+            saveBtn.textContent = "Save";
+            saveBtn.onclick = function() {
+                saveTrackedLigand(entry);
+            };
+
+            const saveAsBtn = document.createElement("button");
+            saveAsBtn.className = "tracked-action-button";
+            saveAsBtn.textContent = "Save As";
+            saveAsBtn.onclick = function() {
+                saveTrackedLigandAs(entry.ligand_id);
+            };
+
+            actions.appendChild(viewBtn);
+            actions.appendChild(saveBtn);
+            actions.appendChild(saveAsBtn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
     }
     
     //-------ligand handling-------
@@ -1283,6 +2113,15 @@
      }
 
      
+     function updateLigandListEntry(id, value) {
+         const li = document.getElementById(`ligand-${id}`);
+         if (!li) return;
+         // The first child node is the text node; the Remove button follows it.
+         if (li.childNodes.length > 0 && li.childNodes[0].nodeType === Node.TEXT_NODE) {
+             li.childNodes[0].nodeValue = `ID: ${id}, ${value}`;
+         }
+     }
+
      function removeLigand(ligandId) {
          const ligandItem = document.getElementById(`ligand-${ligandId}`);
          if (ligandItem) {
@@ -1307,15 +2146,23 @@
         if (!phstd) {
             phstd = 1.0;
         }
-        
-        
-        const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
-        if (!smilesString) {
-            alert("No SMILES string provided.");
+
+        var siteValue = `${phmax} | ${phmin} | ${phstd}`;
+
+        // If a tracked SDF ligand is selected, protonate that instead of typed SMILES.
+        const sourceSelect = document.getElementById("protonationSource");
+        const trackedId = sourceSelect ? sourceSelect.value : "";
+        if (trackedId) {
+            sendParameterToBackend("chemem:ProtonateTrackedLigand", trackedId, siteValue, "ProtonationParameter");
             return;
         }
-        
-        var siteValue = `${phmax} | ${phmin} | ${phstd}`;
+
+        const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
+        if (!smilesString) {
+            alert("No SMILES string or tracked ligand selected.");
+            return;
+        }
+
         sendParameterToBackend("chemem:ProtonateSmiles", smilesString, siteValue, "ProtonationParameter");
         document.getElementById("ligandSmilesForProtonation").value = '';
     }
@@ -1332,28 +2179,34 @@
     }
     
 
-    function addSmilesToProtonationList(smiles) {
+    function addSmilesToProtonationList(smiles, trackedId = null) {
         if (!smiles) {
             alert("No SMILES string provided.");
             return;
         }
-    
+
         // Find the unordered list where the SMILES will be added
         const list = document.getElementById('protonatedSmilesList');
-    
+
         // Create a new list item
         const listItem = document.createElement('li');
-    
+
         // Add the SMILES string as text content of the list item
         listItem.textContent = smiles;
-        
-        
-        
-         
+
+
+
+
          const addButton = document.createElement("button");
          addButton.className = "icon-button"; // Add a class for styling
          addButton.onclick = function() {
-             
+
+             if (trackedId) {
+                 // Replace the tracked SDF ligand in place, preserving its 3D pose.
+                 sendParameterToBackend("chemem:ApplyProtonationToTrackedLigand", trackedId, smiles, "SmilesParameter");
+                 return;
+             }
+
              ligandIdCounter++;
              const className = "SmilesParameter"; // Static for now, change as needed
              const ligandData = {
@@ -1363,7 +2216,7 @@
              };
              sendSiteValueToBackend("chemem:AddLigandSmiles", ligandData);
              addLigandToList(ligandData);
-             
+
          };
          
          const addIcon =  document.createElement("img");
@@ -1551,16 +2404,137 @@
     function autoSiteFinder() {
         sendSiteValueToBackend("chemem:AutoSiteFinder", "None")
     }
-    
-    //-----mask tab 
-    function runAutoMask() {
-        
-        
-       //TODO!! Grab options
-        //remove this variable its not needed 
-        var siteValue = document.getElementById("protocolDropdown").value;
-        
-        sendParameterToBackend("chemem:RunAutoMask", "MaskOptions", siteValue, "MaskOptionsParameter");
+
+    //-----place solvent / ions-----
+    var solventPlacementActive = false;
+
+    function onSolventSpeciesChange() {
+        sendSiteValueToBackend("chemem:SetSolventSpecies",
+                               document.getElementById("solventSpeciesSelect").value);
+    }
+
+    function toggleSolventPlacement() {
+        var btn = document.getElementById("solventPlacementToggle");
+        if (!solventPlacementActive) {
+            // make sure the backend has the currently selected species first
+            sendSiteValueToBackend("chemem:SetSolventSpecies",
+                                   document.getElementById("solventSpeciesSelect").value);
+            sendSiteValueToBackend("chemem:EnableSolventPlacement", "None");
+            solventPlacementActive = true;
+            btn.textContent = "Disable Solvent Placement";
+        } else {
+            sendSiteValueToBackend("chemem:DisableSolventPlacement", "None");
+            solventPlacementActive = false;
+            btn.textContent = "Enable Solvent Placement";
+        }
+    }
+
+    function setSolventStatus(msg) {
+        document.getElementById("addSolventStatus").textContent = msg;
+    }
+
+    //-----mask tab
+    function toggleMaskAdvancedOptions() {
+        var content = document.getElementById("maskAdvancedOptionsContent");
+        var arrow = document.querySelector("#mask-advanced-options .toggle-arrow");
+        if (content.style.display === "block") {
+            content.style.display = "none";
+            if (arrow) arrow.innerHTML = "Advanced Options &#9660;";
+        } else {
+            content.style.display = "block";
+            if (arrow) arrow.innerHTML = "Advanced Options &#9650;";
+        }
+    }
+
+    // Show only the segmentation/output-mode params relevant to the current selection.
+    function updateMaskModeVisibility() {
+        var seg = document.getElementById("maskSegmentMode").value;
+        var out = document.getElementById("maskOutputMode").value;
+
+        var hystGroup = document.getElementById("maskHystGroup");
+        var rwGroup = document.getElementById("maskRwGroup");
+        var featureSiteGroup = document.getElementById("maskFeatureSiteGroup");
+
+        if (hystGroup) hystGroup.style.display = (seg === "hysteresis-segment") ? "block" : "none";
+        if (rwGroup) rwGroup.style.display = (seg === "random-walker-segment") ? "block" : "none";
+        if (featureSiteGroup) featureSiteGroup.style.display = (out === "alpha-feature-sites") ? "block" : "none";
+    }
+
+    // Add a valued option only when the input holds a finite number.
+    function addMaskNumberParameter(elementId, flag, className) {
+        var el = document.getElementById(elementId);
+        if (!el) return;
+        var v = el.valueAsNumber;
+        if (Number.isFinite(v)) {
+            sendParameterToBackend("chemem:AddMaskParameter", flag, v, className);
+        }
+    }
+
+    // Add a non-empty dropdown value as a string option.
+    function addMaskSelectParameter(elementId, flag) {
+        var el = document.getElementById(elementId);
+        if (el && el.value !== "") {
+            sendParameterToBackend("chemem:AddMaskParameter", flag, el.value, "StringParameter");
+        }
+    }
+
+    // Add a bare flag (carries the sentinel 'protocol' value, like the dock tab).
+    function addMaskFlag(flag) {
+        sendParameterToBackend("chemem:AddMaskParameter", flag, "protocol", "StringParameter");
+    }
+
+    function runAlphaMask() {
+        // Start from a clean slate so unchecked options don't linger.
+        sendSiteValueToBackend("chemem:ClearMaskParameters", "None");
+
+        // ----- Core options -----
+        if (document.getElementById("maskSurface").value === "ses") {
+            addMaskFlag("ses-mask");
+        }
+
+        var seg = document.getElementById("maskSegmentMode").value;
+        if (seg !== "gradient") {
+            addMaskFlag(seg);  // otsu-segment | hysteresis-segment | random-walker-segment
+        }
+
+        var out = document.getElementById("maskOutputMode").value;
+        if (out !== "global") {
+            addMaskFlag(out);  // segment-binding-sites | alpha-feature-sites
+        }
+
+        addMaskNumberParameter("maskAlphaPad", "alpha-pad", "FloatParameter");
+
+        // ----- Advanced: geometry -----
+        if (document.getElementById("maskNoBoundry").checked) addMaskFlag("no-boundry");
+        if (document.getElementById("maskNoOtsuFilterSes").checked) addMaskFlag("no-otsu-filter-ses-mask");
+
+        // ----- Advanced: segmentation tuning -----
+        addMaskNumberParameter("maskGradThr", "grad-thr", "FloatParameter");
+        addMaskNumberParameter("maskSigmaCoeff", "sigma-coeff", "FloatParameter");
+        addMaskNumberParameter("maskHystLowK", "hyst-low-k", "FloatParameter");
+        addMaskNumberParameter("maskHystLowSigma", "hyst-low-sigma-fallback", "FloatParameter");
+        addMaskNumberParameter("maskRwBeta", "rw-beta", "FloatParameter");
+        addMaskNumberParameter("maskRwProbThreshold", "rw-prob-threshold", "FloatParameter");
+        addMaskNumberParameter("maskRwBgSigmaK", "rw-bg-sigma-k", "FloatParameter");
+        addMaskSelectParameter("maskRwMode", "rw-mode");
+
+        // ----- Advanced: feature filters -----
+        addMaskNumberParameter("maskSfAmpFrac", "sf-amp-frac", "FloatParameter");
+        addMaskNumberParameter("maskSfVolumeThr", "sf-volume-thr", "FloatParameter");
+        addMaskNumberParameter("maskSfCentroidThr", "sf-centroid-thr", "FloatParameter");
+        addMaskNumberParameter("maskSfSigmaThr", "sf-sigma-thr", "FloatParameter");
+
+        // ----- Advanced: feature separation -----
+        if (document.getElementById("maskSepFeatures").checked) addMaskFlag("sep-features");
+        addMaskNumberParameter("maskSepFeaturesDist", "sep-features-dist", "FloatParameter");
+        addMaskSelectParameter("maskSepFeaturesMode", "sepf-features-mode");
+
+        // ----- Advanced: alpha-feature-as-site mode -----
+        addMaskNumberParameter("maskFeatureSiteRadius", "feature-site-radius", "FloatParameter");
+        addMaskNumberParameter("maskFeatureResidueDilation", "feature-residue-dilation", "FloatParameter");
+        addMaskNumberParameter("maskFeatureAcoDilation", "feature-aco-dilation", "FloatParameter");
+
+        sendSiteValueToBackend("chemem:RunAlphaMask", "None");
     }
     
     //-----dock tab 
@@ -1657,94 +2631,470 @@
         
         
         sendSiteValueToBackend("chemem:RunDocking", "None");
-        
-        
+
+
     }
-    
-    
+
+
+    //-----refine tab
+    function updateRefineMethodVisibility() {
+        const method = document.getElementById("refineMethod").value;
+        const slr2 = document.getElementById("refineSlr2Block");
+        const md = document.getElementById("refineMdBlock");
+        if (slr2) slr2.style.display = (method === "smart-ligand-refine2") ? "block" : "none";
+        if (md) md.style.display = (method === "refine") ? "block" : "none";
+    }
+
+    function toggleRefineAdvanced(contentId, containerId) {
+        const content = document.getElementById(contentId);
+        const arrow = document.querySelector("#" + containerId + " .toggle-arrow");
+        if (!content) return;
+        if (content.style.display === "none" || content.style.display === "") {
+            content.style.display = "block";
+            if (arrow) arrow.innerHTML = "Advanced Options &#9650;";
+        } else {
+            content.style.display = "none";
+            if (arrow) arrow.innerHTML = "Advanced Options &#9660;";
+        }
+    }
+
+    // Unified pose picker fed {tracked:[...], docked:[...]} from GetRefinePoses.
+    function renderRefinePosePicker(data) {
+        const root = document.getElementById("refinePosePicker");
+        if (!root) return;
+        root.innerHTML = "";
+
+        const tracked = (data && Array.isArray(data.tracked)) ? data.tracked : [];
+        const docked = (data && Array.isArray(data.docked)) ? data.docked : [];
+
+        if (tracked.length === 0 && docked.length === 0) {
+            root.textContent = "No poses available. Load a ligand on the Ligands tab or run a Dock job.";
+            return;
+        }
+
+        const addRow = (source, key, labelText) => {
+            // mirror the working custom-checkbox markup: input + .checkmark span + text,
+            // inside a position:relative .checkbox-label (the native input is hidden by CSS
+            // and the visible box is drawn by .checkmark).
+            const label = document.createElement("label");
+            label.className = "checkbox-label";
+            const cb = document.createElement("input");
+            cb.type = "checkbox";
+            cb.className = "refine-pose-checkbox";
+            cb.dataset.source = source;
+            cb.dataset.key = key;
+            const mark = document.createElement("span");
+            mark.className = "checkmark";
+            const span = document.createElement("span");
+            span.textContent = labelText;
+            label.appendChild(cb);
+            label.appendChild(mark);
+            label.appendChild(span);
+            return label;
+        };
+
+        if (tracked.length) {
+            const hdr = document.createElement("div");
+            hdr.className = "dir-header";
+            hdr.textContent = "Tracked ligands";
+            root.appendChild(hdr);
+            tracked.forEach((entry) => {
+                const name = entry.display_name || entry.model_name || "Tracked ligand";
+                const modelPart = entry.model_id ? ` (#${entry.model_id})` : "";
+                root.appendChild(addRow("tracked", entry.ligand_id, name + modelPart));
+            });
+        }
+
+        if (docked.length) {
+            const hdr = document.createElement("div");
+            hdr.className = "dir-header";
+            hdr.textContent = "Docked solutions";
+            root.appendChild(hdr);
+            docked.forEach((sol) => {
+                const scoreStr = (sol.score !== undefined && sol.score !== null) ? `  [score: ${sol.score}]` : "";
+                const dirStr = sol.directory ? `${sol.directory} / ` : "";
+                root.appendChild(addRow("docked", sol.full_path, `${dirStr}${sol.display_name}${scoreStr}`));
+            });
+        }
+    }
+
+    function runRefine() {
+        // collect selected poses
+        const selected = [];
+        document.querySelectorAll("#refinePosePicker .refine-pose-checkbox").forEach((cb) => {
+            if (cb.checked) {
+                selected.push({ source: cb.dataset.source, key: cb.dataset.key });
+            }
+        });
+        if (selected.length === 0) {
+            alert("Select at least one pose to refine.");
+            return;
+        }
+
+        // reset accumulated parameters first, then push current UI state
+        sendSiteValueToBackend("chemem:ClearRefineParameters", "None");
+        sendParameterToBackend("chemem:SetRefinePoses", "poses", JSON.stringify(selected), "StringParameter");
+
+        const method = document.getElementById("refineMethod").value;
+        sendParameterToBackend("chemem:AddRefineParameter", method, "protocol", "StringParameter");
+
+        if (method === "smart-ligand-refine2") {
+            const opt = document.getElementById("refineOptScore").value;
+            sendParameterToBackend("chemem:AddRefineParameter", "sr2-optimisation-score", opt, "StringParameter");
+
+            const acc = document.getElementById("refineAccScore").value;
+            sendParameterToBackend("chemem:AddRefineParameter", "sr2-acceptance-score", acc, "StringParameter");
+
+            const fm = document.getElementById("refineFinalMinimise");
+            if (fm && !fm.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "no-sr2-final-minimise", "protocol", "StringParameter");
+            }
+            const ta = document.getElementById("refineTailAware");
+            if (ta && !ta.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "no-sr2-tail-aware", "protocol", "StringParameter");
+            }
+            const rb = document.getElementById("refineRobust");
+            if (rb && rb.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-robust", "protocol", "StringParameter");
+            }
+            const pm = document.getElementById("refinePreMinimiseSlr2");
+            if (pm && pm.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-pre-minimise", "protocol", "StringParameter");
+            }
+            const np = document.getElementById("refineNoPolish");
+            if (np && np.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-no-polish", "protocol", "StringParameter");
+            }
+
+            // only emit the advanced selects when changed off their default, so a
+            // default run stays minimal (and tolerant of older backends).
+            const minv = document.getElementById("refineMinimiser").value;
+            if (minv && minv !== "standard") {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-minimiser", minv, "StringParameter");
+            }
+            const selv = document.getElementById("refineSelection").value;
+            if (selv && selv !== "greedy") {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-selection", selv, "StringParameter");
+            }
+
+            const fq = document.getElementById("refineFreezeBlockQ").valueAsNumber;
+            if (Number.isFinite(fq)) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-freeze-block-qscore", fq, "FloatParameter");
+            }
+            const bs = document.getElementById("refineBranchStep").valueAsNumber;
+            if (Number.isFinite(bs)) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-branch-coarse-step-deg", bs, "FloatParameter");
+            }
+            const cd = document.getElementById("refineCandidateDirs").valueAsNumber;
+            if (Number.isFinite(cd)) {
+                sendParameterToBackend("chemem:AddRefineParameter", "sr2-qscore-candidate-dirs", cd, "IntParameter");
+            }
+        } else if (method === "refine") {
+            const local = document.getElementById("refineLocal");
+            if (local && local.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "local-refine", "protocol", "StringParameter");
+            }
+            const lr = document.getElementById("refineLocalRadius").valueAsNumber;
+            if (Number.isFinite(lr)) {
+                sendParameterToBackend("chemem:AddRefineParameter", "local-radius", lr, "FloatParameter");
+            }
+            const ann = document.getElementById("refineAnnealing");
+            if (ann && ann.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "annealing", "protocol", "StringParameter");
+            }
+            const gk = document.getElementById("refineGlobalK").valueAsNumber;
+            if (Number.isFinite(gk)) {
+                sendParameterToBackend("chemem:AddRefineParameter", "global-k", gk, "FloatParameter");
+            }
+            const com = document.getElementById("refineComRestraint");
+            if (com && com.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "com-restraint", "protocol", "StringParameter");
+            }
+
+            const preMd = document.getElementById("refinePreMinimiseMd");
+            if (preMd && preMd.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "pre-minimise", "protocol", "StringParameter");
+            }
+            const postMd = document.getElementById("refinePostMinimiseMd");
+            if (postMd && postMd.checked) {
+                sendParameterToBackend("chemem:AddRefineParameter", "post-minimise", "protocol", "StringParameter");
+            }
+
+            const numMap = [
+                ["refineBaseTemp", "base-temp", "FloatParameter"],
+                ["refineHeatToK", "heat-to-k", "FloatParameter"],
+                ["refineTempStepK", "temp-step-k", "FloatParameter"],
+                ["refineStepsPerTemp", "steps-per-temp", "IntParameter"],
+                ["refineHighHoldPs", "high-hold-ps", "FloatParameter"],
+                ["refineCycles", "cycles", "IntParameter"],
+                ["refineSeed", "seed", "IntParameter"],
+                ["refineComDist", "com-restraint-dist", "FloatParameter"],
+                ["refineComKcal", "com-restrain-kcal-per-mol", "FloatParameter"],
+            ];
+            numMap.forEach(([elId, token, cls]) => {
+                const v = document.getElementById(elId).valueAsNumber;
+                if (Number.isFinite(v)) {
+                    sendParameterToBackend("chemem:AddRefineParameter", token, v, cls);
+                }
+            });
+        }
+
+        sendSiteValueToBackend("chemem:RunRefine", "None");
+    }
+
+    function renderRefineResults(data) {
+        // Same payload shape as renderDockResults; targets #refineResults and
+        // wires View/Hide/Add to the refine commands.
+        const root = document.getElementById("refineResults");
+        if (!root) return;
+        root.innerHTML = "";
+
+        if (!data || !Array.isArray(data.directories) || !Array.isArray(data.results)) {
+            root.textContent = "No results found.";
+            return;
+        }
+        if (data.directories.length === 0) {
+            root.textContent = "No results found.";
+            return;
+        }
+
+        data.directories.forEach((dirName, idx) => {
+            const solutions = data.results[idx] || [];
+
+            const details = document.createElement("details");
+            details.className = "folder";
+            details.open = true;
+
+            const summary = document.createElement("summary");
+            summary.className = "dir-header";
+            summary.textContent = `${dirName} (${solutions.length})`;
+            details.appendChild(summary);
+
+            const list = document.createElement("div");
+
+            solutions.forEach((sol) => {
+                const row = document.createElement("div");
+                row.className = "result-row";
+
+                const name = document.createElement("div");
+                name.className = "result-name";
+                const scoreStr = (sol.score !== undefined && sol.score !== null) ? `  [score: ${sol.score}]` : "";
+                name.textContent = `${sol.display_name}${scoreStr}`;
+                row.appendChild(name);
+
+                const viewBtn = document.createElement("button");
+                viewBtn.className = "icon-button";
+                const viewIcon = document.createElement("img");
+                viewIcon.src = "img/view.png";
+                viewIcon.alt = "View";
+                viewIcon.className = "icon";
+                viewBtn.appendChild(viewIcon);
+                viewBtn.dataset.state = "hidden";
+                viewBtn.addEventListener("click", () => {
+                    const isHidden = viewBtn.dataset.state === "hidden";
+                    if (isHidden) {
+                        sendParameterToBackend("chemem:ViewRefineSolution", "ViewSolution", sol.full_path, "PathParameter");
+                        viewBtn.dataset.state = "visible";
+                        viewIcon.src = "img/hide.png";
+                        viewIcon.alt = "Hide";
+                        viewBtn.title = "Hide";
+                    } else {
+                        sendParameterToBackend("chemem:HideRefineSolution", "HideSolution", sol.full_path, "PathParameter");
+                        viewBtn.dataset.state = "hidden";
+                        viewIcon.src = "img/view.png";
+                        viewIcon.alt = "View";
+                        viewBtn.title = "View";
+                    }
+                });
+                row.appendChild(viewBtn);
+
+                const addBtn = document.createElement("button");
+                addBtn.className = "icon-button";
+                addBtn.onclick = function () {
+                    sendParameterToBackend("chemem:AddRefineSolutionToStructure", "AddSolution", sol.full_path, "PathParameter");
+                };
+                const addIcon = document.createElement("img");
+                addIcon.src = "img/add.png";
+                addIcon.alt = "Add";
+                addIcon.className = "icon";
+                addBtn.appendChild(addIcon);
+                row.appendChild(addBtn);
+
+                list.appendChild(row);
+            });
+
+            details.appendChild(list);
+            root.appendChild(details);
+        });
+    }
+
+
+    // ---- Unified Jobs tab ----
+    // Friendly sequential numbering (job.id is a session-global int; we show "Job N").
+    let jobCounter = 0;
+    const jobNumbers = {};
+    const MAX_JOB_OUTPUT_LINES = 500;
+    // Routing for the per-type "Load" button; types absent here get no Load button.
+    const LOAD_COMMANDS = {
+        "dock": "chemem:LoadDockJob",
+        "alpha-mask": "chemem:LoadAlphaMaskJob",
+        "refine": "chemem:LoadRefineJob",
+    };
+    // Fallback labels when a job payload has no explicit summary.
+    const JOB_LABELS = {
+        "dock": "Dock",
+        "alpha-mask": "Alpha Mask",
+        "ion-fixer": "Add Ions",
+        "export-sim": "Export Simulation",
+        "refine": "Refine",
+    };
+
+    function jobLabel(jobData) {
+        return jobData.summary || JOB_LABELS[jobData.type] || jobData.type || "Job";
+    }
+
+    function setJobInfoText(jobItem) {
+        const info = jobItem.querySelector('.job-info');
+        if (info) {
+            info.textContent = `${jobItem.dataset.label} — ${jobItem.dataset.status}`;
+        }
+    }
+
     function addJob(jobData) {
-        
-        
-        const { id, status } = jobData;
-        const jobId = id;
+        const jobId = jobData.id;
         const jobList = document.getElementById("jobList");
         if (!jobList) {
             alert("Failed to find the job list element.");
-            return; 
+            return;
         }
-        
-        // Create a new list item to represent the job
+
+        if (!(jobId in jobNumbers)) {
+            jobNumbers[jobId] = ++jobCounter;
+        }
+        const label = `Job ${jobNumbers[jobId]}: ${jobLabel(jobData)}`;
+
         const li = document.createElement("li");
         li.className = 'job-item';
         li.id = `job-${jobId}`;
-        
-        // Create a status indicator element
+        li.dataset.status = "Running";
+        li.dataset.label = label;
+
+        // ---- header row ----
+        const header = document.createElement('div');
+        header.className = 'job-header';
+
         const statusIndicator = document.createElement('div');
-        statusIndicator.className = 'status-indicator';
-        
-        // Add initial status class
-        statusIndicator.classList.add(status.toLowerCase());
-        
-        // Create a job info span to show job ID, status, and command
+        statusIndicator.className = 'status-indicator running';
+
         const jobInfo = document.createElement('span');
-        jobInfo.textContent = `Job ID: ${jobId}, Status: ${status}`;
-        
-        // Create a button to load job details (you can implement the action)
-        const loadBtn = document.createElement("button");
-        loadBtn.className = 'load-btn';
-        loadBtn.textContent = "Load";
-        loadBtn.onclick = function (event) {
-            sendSiteValueToBackend("chemem:LoadDockJob", jobId); 
-            
-    
-        };
-        
-    
-        // Create a button to cancel the job (implement the backend job cancellation logic)
+        jobInfo.className = 'job-info';
+
+        const outputToggle = document.createElement('span');
+        outputToggle.className = 'toggle-arrow job-output-toggle';
+        outputToggle.innerHTML = "Output &#9660;";
+        outputToggle.onclick = function () { toggleJobOutput(jobId); };
+
+        header.appendChild(statusIndicator);
+        header.appendChild(jobInfo);
+        header.appendChild(outputToggle);
+
+        const loadCommand = LOAD_COMMANDS[jobData.type];
+        if (loadCommand) {
+            const loadBtn = document.createElement("button");
+            loadBtn.className = 'load-btn';
+            loadBtn.textContent = "Load";
+            loadBtn.onclick = function () { sendSiteValueToBackend(loadCommand, jobId); };
+            header.appendChild(loadBtn);
+        }
+
         const removeBtn = document.createElement("button");
         removeBtn.className = 'cancel-btn';
         removeBtn.textContent = "Cancel";
-        removeBtn.onclick = function () {
-            removeJob(jobId);
-        };
-        
-        // Append elements to the job item
-        li.appendChild(statusIndicator);
-        li.appendChild(jobInfo);
-        li.appendChild(loadBtn);
-        li.appendChild(removeBtn);
-        
-        // Add the job item to the job list
+        removeBtn.onclick = function () { removeJob(jobId); };
+        header.appendChild(removeBtn);
+
+        li.appendChild(header);
+
+        // ---- collapsible live-output panel ----
+        const output = document.createElement('div');
+        output.className = 'collapse job-output';
+        output.id = `job-output-${jobId}`;
+        li.appendChild(output);
+
         jobList.appendChild(li);
-        updateJobStatus(jobId, "Running");
-        
+        setJobInfoText(li);
+        refreshJobsBadge();
     }
-    
+
+    // Append one live-output line to a job's panel.
+    function appendJobOutput(payload) {
+        const panel = document.getElementById(`job-output-${payload.id}`);
+        if (!panel) return;
+
+        const line = document.createElement('div');
+        line.className = 'job-output-line';
+        if (payload.stream === 'err') line.classList.add('job-output-error');
+        line.textContent = payload.line;   // textContent -> safe against injection
+        panel.appendChild(line);
+
+        // Bound DOM growth.
+        while (panel.childElementCount > MAX_JOB_OUTPUT_LINES) {
+            panel.removeChild(panel.firstChild);
+        }
+        panel.scrollTop = panel.scrollHeight;
+    }
+
+    function toggleJobOutput(jobId) {
+        const panel = document.getElementById(`job-output-${jobId}`);
+        const jobItem = document.getElementById(`job-${jobId}`);
+        if (!panel || !jobItem) return;
+        const arrow = jobItem.querySelector('.job-output-toggle');
+        if (panel.style.display === "block") {
+            panel.style.display = "none";
+            if (arrow) arrow.innerHTML = "Output &#9660;";
+        } else {
+            panel.style.display = "block";
+            if (arrow) arrow.innerHTML = "Output &#9650;";
+            panel.scrollTop = panel.scrollHeight;
+        }
+    }
+
     // Function to remove a job item from the UI
     function removeJob(jobId) {
         const jobItem = document.getElementById(`job-${jobId}`);
         if (jobItem) {
             jobItem.parentNode.removeChild(jobItem);
         }
-        sendSiteValueToBackend("chemem:RemoveJob", jobId)
+        sendSiteValueToBackend("chemem:RemoveJob", jobId);
+        refreshJobsBadge();
     }
-
 
     function updateJobStatus(jobId, newStatus) {
         const jobItem = document.getElementById(`job-${jobId}`);
         if (jobItem) {
             const statusIndicator = jobItem.querySelector('.status-indicator');
-            const jobInfo = jobItem.querySelector('span');
-    
-            // Update the class for the status indicator
-            statusIndicator.className = 'status-indicator';  // Reset class
-            statusIndicator.classList.add(newStatus.toLowerCase());  // Add new status class
-    
-            // Update the job info text content
-            jobInfo.textContent = `Job ID: ${jobId}, Status: ${newStatus}`;
+            statusIndicator.className = 'status-indicator';
+            statusIndicator.classList.add(newStatus.toLowerCase());
+
+            jobItem.dataset.status = newStatus;
+            setJobInfoText(jobItem);
+            refreshJobsBadge();
         }
     }
-    
+
+    // Count running jobs and reflect it on the Jobs tab button badge.
+    function refreshJobsBadge() {
+        const badge = document.getElementById("jobsBadge");
+        if (!badge) return;
+        const running = document.querySelectorAll("#jobList .status-indicator.running").length;
+        if (running > 0) {
+            badge.textContent = running;
+            badge.style.display = "inline-block";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+
     // Renders the two-layer list: directories -> solutions
     function renderDockResults(data) {
       // Expected shape:
@@ -2007,7 +3357,50 @@
         // Append the list item to the ligand list
         ligandList.appendChild(li);
     }
-    
+
+    // Build-tab picker of tracked SDF ligands available to add to the simulation.
+    // Fed the same payload as the Setup-tab tracked list (pushed from Python).
+    function renderSimulationLigandPicker(ligands) {
+        const list = document.getElementById('simulationLigandPicker');
+        if (!list) return;
+        list.innerHTML = '';
+        const entries = Array.isArray(ligands) ? ligands : [];
+        if (entries.length === 0) {
+            const empty = document.createElement('li');
+            empty.className = 'tracked-empty';
+            empty.textContent = 'No tracked ligands yet. Load one via Setup > Ligand File, or add a docked solution.';
+            list.appendChild(empty);
+            return;
+        }
+        entries.forEach((entry) => {
+            const li = document.createElement('li');
+            li.className = 'tracked-ligand-row';
+
+            const main = document.createElement('div');
+            main.className = 'tracked-ligand-main';
+            const title = document.createElement('div');
+            title.className = 'tracked-ligand-title';
+            title.textContent = entry.display_name || entry.model_name || 'Tracked ligand';
+            main.appendChild(title);
+
+            const actions = document.createElement('div');
+            actions.className = 'tracked-ligand-actions';
+            const addBtn = document.createElement('button');
+            addBtn.className = 'tracked-action-button';
+            addBtn.textContent = 'Add';
+            addBtn.onclick = function() { addTrackedLigandToSimulation(entry.ligand_id); };
+            actions.appendChild(addBtn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
+    }
+
+    function addTrackedLigandToSimulation(ligandId) {
+        sendSiteValueToBackend("chemem:AddTrackedLigandToSimulation", ligandId);
+    }
+
     function removeSimulationLigand(ligandId) {
         const ligandItem = document.getElementById(`ligand-${ligandId}`);
         if (ligandItem) {
@@ -2081,8 +3474,621 @@
         showRunHidePause();
     }
 
-    
-    
+    // ---- Interactive restraints / minimise / simulated annealing ----
+    // Each restraint button asks the backend to read the current atom
+    // selection and add the matching restraint to the live simulation.
+
+    var tugModeActive = false;
+
+    function toggleTugMode() {
+        if (tugModeActive) {
+            sendSiteValueToBackend("chemem:DisableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Enable Tug Mode';
+        } else {
+            sendSiteValueToBackend("chemem:EnableTugMode", "None");
+            document.getElementById('toggleTugButton').textContent = 'Disable Tug Mode';
+        }
+        tugModeActive = !tugModeActive;
+    }
+
+    function SaltBridgeTug() {
+        sendSiteValueToBackend("chemem:SetSaltBridgeTug", "None");
+    }
+
+    function HBondTug() {
+        sendSiteValueToBackend("chemem:SetHBondTug", "None");
+    }
+
+    function WeakHBondTug() {
+        sendSiteValueToBackend("chemem:SetWeakHBondTug", "None");
+    }
+
+    function PiPiPTug() {
+        sendSiteValueToBackend("chemem:SetPiPiPTug", "None");
+    }
+
+    function PiPiTTug() {
+        sendSiteValueToBackend("chemem:SetPiPiTTug", "None");
+    }
+
+    function CationPiTug() {
+        sendSiteValueToBackend("chemem:SetCationPiTTug", "None");
+    }
+
+    function HalogenBondTug() {
+        sendSiteValueToBackend("chemem:SetHalogenBondTug", "None");
+    }
+
+    // Out of scope for now (no backend command yet) - no-op stubs so the
+    // buttons don't raise a ReferenceError when clicked.
+    function HBondPiTug() {
+        console.log("HBondPiTug not yet implemented");
+    }
+
+    function HalogenPiTug() {
+        console.log("HalogenPiTug not yet implemented");
+    }
+
+    function minimiseSimulation() {
+        sendSiteValueToBackend("chemem:MinimiseSimulation", "None");
+    }
+
+    // ===================================================================
+    // Simulation status line
+    // ===================================================================
+    function showSimulationStatus(message) {
+        const el = document.getElementById("simulationStatus");
+        if (el) {
+            el.textContent = message;
+            el.style.display = "block";
+        } else {
+            console.warn(message);
+        }
+    }
+
+    // ===================================================================
+    // Save points (Feature 1)
+    // ===================================================================
+    function saveSimulationSnapshot() {
+        sendSiteValueToBackend("chemem:SaveSimulationSnapshot", "None");
+    }
+
+    function restoreSimulationSnapshot(id) {
+        sendSiteValueToBackend("chemem:RestoreSimulationSnapshot", id);
+    }
+
+    function renderSavePoints(points, activeId) {
+        const list = document.getElementById("savePointsList");
+        if (!list) return;
+        list.innerHTML = "";
+        const entries = Array.isArray(points) ? points : [];
+        if (entries.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "tracked-empty";
+            empty.textContent = "No save points yet. They appear automatically at minimisation and when you click Save.";
+            list.appendChild(empty);
+            return;
+        }
+        entries.forEach((sp) => {
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+            if (activeId !== null && activeId !== undefined && sp.id === activeId) {
+                li.classList.add("is-dirty");
+            }
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = `#${sp.id}  ${sp.label}`;
+            main.appendChild(title);
+
+            const meta = document.createElement("div");
+            meta.className = "tracked-ligand-meta";
+            meta.textContent = `${sp.timestamp}  ·  ${sp.kind}`;
+            main.appendChild(meta);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+            const revertBtn = document.createElement("button");
+            revertBtn.className = "tracked-action-button";
+            revertBtn.textContent = "Revert";
+            revertBtn.onclick = function() { restoreSimulationSnapshot(sp.id); };
+            actions.appendChild(revertBtn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
+    }
+
+    // ===================================================================
+    // Torsion preferences (Feature 2)
+    // ===================================================================
+    // key -> {label, currentText} cache so a profile push can update its row.
+    var torsionRowState = {};
+
+    function syncSelectedTorsions() {
+        sendSiteValueToBackend("chemem:SyncSelectedTorsions", "None");
+    }
+    function stepTorsionForward(key) {
+        sendSiteValueToBackend("chemem:StepTorsionForward", key);
+    }
+    function stepTorsionBackward(key) {
+        sendSiteValueToBackend("chemem:StepTorsionBackward", key);
+    }
+    function showTorsionProfile(key) {
+        sendSiteValueToBackend("chemem:ShowTorsionProfile", key);
+    }
+    function flipTorsionSide(key) {
+        sendSiteValueToBackend("chemem:FlipTorsionSide", key);
+    }
+    function applyTorsionColor(mode) {
+        sendSiteValueToBackend("chemem:ColorTorsionStrain", mode);
+    }
+    function clearTorsionColor() {
+        sendSiteValueToBackend("chemem:ClearTorsionStrainColor", "None");
+    }
+
+    function renderSelectedTorsions(rows) {
+        const list = document.getElementById("selectedTorsionList");
+        if (!list) return;
+        list.innerHTML = "";
+        torsionRowState = {};
+        const entries = Array.isArray(rows) ? rows : [];
+        if (entries.length === 0) {
+            const empty = document.createElement("li");
+            empty.className = "tracked-empty";
+            empty.textContent = "Select both atoms of one or more rotatable ligand bonds, then click Use selection.";
+            list.appendChild(empty);
+            return;
+        }
+        entries.forEach((row) => {
+            torsionRowState[row.key] = { label: row.label };
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+            li.id = "torsion-row-" + cssSafe(row.key);
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+            main.style.cursor = "pointer";
+            main.onclick = function() { showTorsionProfile(row.key); };
+
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = "Torsion " + row.label;
+            main.appendChild(title);
+
+            const meta = document.createElement("div");
+            meta.className = "tracked-ligand-meta";
+            meta.id = "torsion-meta-" + cssSafe(row.key);
+            meta.textContent = "Click to scan / show profile";
+            main.appendChild(meta);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+
+            const flipBtn = document.createElement("button");
+            flipBtn.className = "tracked-action-button secondary";
+            flipBtn.textContent = "⇄";
+            const movingCount = row.flipped ? row.large_count : row.small_count;
+            flipBtn.title = "Flip which side rotates (now rotating " +
+                            (movingCount == null ? "?" : movingCount) + " atoms)";
+            flipBtn.onclick = function() { flipTorsionSide(row.key); };
+
+            const prevBtn = document.createElement("button");
+            prevBtn.className = "tracked-action-button secondary";
+            prevBtn.textContent = "◀";
+            prevBtn.title = "Previous minimum";
+            prevBtn.onclick = function() { stepTorsionBackward(row.key); };
+            const nextBtn = document.createElement("button");
+            nextBtn.className = "tracked-action-button";
+            nextBtn.textContent = "▶";
+            nextBtn.title = "Next minimum";
+            nextBtn.onclick = function() { stepTorsionForward(row.key); };
+            actions.appendChild(flipBtn);
+            actions.appendChild(prevBtn);
+            actions.appendChild(nextBtn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
+    }
+
+    function cssSafe(s) {
+        return String(s).replace(/[^a-zA-Z0-9_-]/g, "_");
+    }
+
+    function renderTorsionProfile(payload) {
+        const container = document.getElementById("torsionProfileContainer");
+        if (!container || !payload) return;
+        const points = Array.isArray(payload.points) ? payload.points : [];
+        const minima = Array.isArray(payload.minima) ? payload.minima : [];
+
+        // update the row's meta line with the current minimum / count
+        const meta = document.getElementById("torsion-meta-" + cssSafe(payload.key));
+        if (meta) {
+            let txt = `${minima.length} minima`;
+            if (payload.current_idx !== null && payload.current_idx !== undefined) {
+                txt += `  ·  at minimum #${payload.current_idx + 1}`;
+            }
+            if (payload.current_angle !== null && payload.current_angle !== undefined) {
+                txt += `  ·  ${payload.current_angle.toFixed(0)}°`;
+            }
+            meta.textContent = txt;
+        }
+
+        if (points.length === 0) {
+            container.innerHTML = "<div class='torsion-empty'>No profile.</div>";
+            return;
+        }
+
+        const W = 360, H = 170, padL = 40, padR = 12, padT = 12, padB = 26;
+        const plotW = W - padL - padR, plotH = H - padT - padB;
+        const maxE = Math.max(1e-6, ...points.map(p => p[1]));
+        const xOf = (ang) => padL + (ang / 360) * plotW;
+        const yOf = (en) => padT + plotH - (en / maxE) * plotH;
+
+        let path = "";
+        points.forEach((p, idx) => {
+            path += (idx === 0 ? "M" : "L") + xOf(p[0]).toFixed(1) + "," + yOf(p[1]).toFixed(1) + " ";
+        });
+
+        let svg = `<svg width="100%" viewBox="0 0 ${W} ${H}" class="torsion-svg" preserveAspectRatio="xMidYMid meet">`;
+        svg += `<text x="4" y="${padT + 8}" class="torsion-axis">kJ/mol</text>`;
+        // axes
+        svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" class="torsion-axis-line"/>`;
+        svg += `<line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" class="torsion-axis-line"/>`;
+        // x ticks
+        [0, 90, 180, 270, 360].forEach(a => {
+            svg += `<text x="${xOf(a).toFixed(1)}" y="${H - 8}" class="torsion-axis" text-anchor="middle">${a}</text>`;
+        });
+        // minima markers
+        minima.forEach(m => {
+            const cx = xOf(m.angle).toFixed(1), cy = yOf(m.energy).toFixed(1);
+            svg += `<circle cx="${cx}" cy="${cy}" r="${m.is_global ? 4 : 3}" class="${m.is_global ? 'torsion-min-global' : 'torsion-min-local'}"/>`;
+        });
+        // current-angle cursor
+        if (payload.current_angle !== null && payload.current_angle !== undefined) {
+            const cx = xOf(payload.current_angle).toFixed(1);
+            svg += `<line x1="${cx}" y1="${padT}" x2="${cx}" y2="${padT + plotH}" class="torsion-cursor"/>`;
+        }
+        // the curve
+        svg += `<path d="${path.trim()}" class="torsion-curve" fill="none"/>`;
+        svg += `</svg>`;
+        svg += `<div class='torsion-caption'>${payload.label || ""} — total context energy (incl. map bias), relative</div>`;
+        container.innerHTML = svg;
+    }
+
+    // ===================================================================
+    // Ligand-tab: standalone torsion-minima flicker + in-place isomers
+    // ===================================================================
+    function populateLigandGeomSource(entries) {
+        const select = document.getElementById("ligandGeomSource");
+        if (!select) return;
+        const list = Array.isArray(entries) ? entries : [];
+        const previous = select.value;
+        select.innerHTML = "";
+
+        const defaultOpt = document.createElement("option");
+        defaultOpt.value = "";
+        defaultOpt.textContent = "— Select a tracked ligand —";
+        select.appendChild(defaultOpt);
+
+        list.forEach((entry) => {
+            const opt = document.createElement("option");
+            opt.value = entry.ligand_id;
+            opt.textContent = entry.display_name || entry.model_name || `Ligand ${entry.ligand_id}`;
+            select.appendChild(opt);
+        });
+
+        if (previous && list.some((e) => String(e.ligand_id) === String(previous))) {
+            select.value = previous;
+        }
+    }
+
+    function onLigandGeomSourceChange() {
+        const select = document.getElementById("ligandGeomSource");
+        const id = select ? select.value : "";
+        if (!id) {
+            renderLigandTorsionRows([]);
+            showLigandTorsionStatus("");
+            renderLigandIsomers({ ligand_id: "", double_bonds: [], chiral_centers: [] });
+            const prof = document.getElementById("ligandTorsionProfileContainer");
+            if (prof) prof.innerHTML = "";
+            return;
+        }
+        sendSiteValueToBackend("chemem:LigandTorsionRows", id);
+        sendSiteValueToBackend("chemem:ShowLigandIsomers", id);
+    }
+
+    function stepLigandTorsionForward(key) {
+        sendSiteValueToBackend("chemem:StepLigandTorsionForward", key);
+    }
+    function stepLigandTorsionBackward(key) {
+        sendSiteValueToBackend("chemem:StepLigandTorsionBackward", key);
+    }
+    function showLigandTorsionProfile(key) {
+        sendSiteValueToBackend("chemem:ShowLigandTorsionProfile", key);
+    }
+    function exportLigandTorsions() {
+        const select = document.getElementById("ligandGeomSource");
+        const id = select ? select.value : "";
+        if (!id) {
+            alert("Select a tracked ligand first.");
+            return;
+        }
+        sendSiteValueToBackend("chemem:ExportLigandTorsions", id);
+    }
+
+    function showLigandTorsionStatus(msg) {
+        const el = document.getElementById("ligandTorsionStatus");
+        if (el) el.textContent = msg || "";
+    }
+
+    function renderLigandTorsionRows(rows) {
+        const list = document.getElementById("ligandTorsionList");
+        if (!list) return;
+        list.innerHTML = "";
+        const prof = document.getElementById("ligandTorsionProfileContainer");
+        if (prof) prof.innerHTML = "";
+        const entries = Array.isArray(rows) ? rows : [];
+        if (entries.length === 0) return;
+
+        entries.forEach((row) => {
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+            li.id = "ligand-torsion-row-" + cssSafe(row.key);
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+            main.style.cursor = "pointer";
+            main.onclick = function() { showLigandTorsionProfile(row.key); };
+
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = "Torsion " + row.label;
+            main.appendChild(title);
+
+            const meta = document.createElement("div");
+            meta.className = "tracked-ligand-meta";
+            meta.id = "ligand-torsion-meta-" + cssSafe(row.key);
+            const nmin = (row.n_minima != null) ? row.n_minima
+                       : (Array.isArray(row.minima) ? row.minima.length : 0);
+            meta.textContent = nmin + " minima · click to show profile";
+            main.appendChild(meta);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+
+            const prevBtn = document.createElement("button");
+            prevBtn.className = "tracked-action-button secondary";
+            prevBtn.textContent = "◀";
+            prevBtn.title = "Previous minimum";
+            prevBtn.onclick = function() { stepLigandTorsionBackward(row.key); };
+
+            const nextBtn = document.createElement("button");
+            nextBtn.className = "tracked-action-button";
+            nextBtn.textContent = "▶";
+            nextBtn.title = "Next minimum";
+            nextBtn.onclick = function() { stepLigandTorsionForward(row.key); };
+
+            actions.appendChild(prevBtn);
+            actions.appendChild(nextBtn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            list.appendChild(li);
+        });
+    }
+
+    function renderLigandTorsionProfile(payload) {
+        const container = document.getElementById("ligandTorsionProfileContainer");
+        if (!container || !payload) return;
+        const points = Array.isArray(payload.points) ? payload.points : [];
+        const minima = Array.isArray(payload.minima) ? payload.minima : [];
+
+        const meta = document.getElementById("ligand-torsion-meta-" + cssSafe(payload.key));
+        if (meta) {
+            let txt = `${minima.length} minima`;
+            if (payload.current_idx !== null && payload.current_idx !== undefined) {
+                txt += `  ·  at minimum #${payload.current_idx + 1}`;
+            }
+            if (payload.current_angle !== null && payload.current_angle !== undefined) {
+                txt += `  ·  ${payload.current_angle.toFixed(0)}°`;
+            }
+            meta.textContent = txt;
+        }
+
+        if (points.length === 0) {
+            container.innerHTML = "<div class='torsion-empty'>No profile.</div>";
+            return;
+        }
+
+        const W = 360, H = 170, padL = 40, padR = 12, padT = 12, padB = 26;
+        const plotW = W - padL - padR, plotH = H - padT - padB;
+        const maxE = Math.max(1e-6, ...points.map(p => p[1]));
+        const xOf = (ang) => padL + (ang / 360) * plotW;
+        const yOf = (en) => padT + plotH - (en / maxE) * plotH;
+
+        let path = "";
+        points.forEach((p, idx) => {
+            path += (idx === 0 ? "M" : "L") + xOf(p[0]).toFixed(1) + "," + yOf(p[1]).toFixed(1) + " ";
+        });
+
+        let svg = `<svg width="100%" viewBox="0 0 ${W} ${H}" class="torsion-svg" preserveAspectRatio="xMidYMid meet">`;
+        svg += `<text x="4" y="${padT + 8}" class="torsion-axis">norm</text>`;
+        svg += `<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${padT + plotH}" class="torsion-axis-line"/>`;
+        svg += `<line x1="${padL}" y1="${padT + plotH}" x2="${padL + plotW}" y2="${padT + plotH}" class="torsion-axis-line"/>`;
+        [0, 90, 180, 270, 360].forEach(a => {
+            svg += `<text x="${xOf(a).toFixed(1)}" y="${H - 8}" class="torsion-axis" text-anchor="middle">${a}</text>`;
+        });
+        minima.forEach(m => {
+            const cx = xOf(m.angle).toFixed(1), cy = yOf(m.energy).toFixed(1);
+            svg += `<circle cx="${cx}" cy="${cy}" r="${m.is_global ? 4 : 3}" class="${m.is_global ? 'torsion-min-global' : 'torsion-min-local'}"/>`;
+        });
+        if (payload.current_angle !== null && payload.current_angle !== undefined) {
+            const cx = xOf(payload.current_angle).toFixed(1);
+            svg += `<line x1="${cx}" y1="${padT}" x2="${cx}" y2="${padT + plotH}" class="torsion-cursor"/>`;
+        }
+        svg += `<path d="${path.trim()}" class="torsion-curve" fill="none"/>`;
+        svg += `</svg>`;
+        svg += `<div class='torsion-caption'>${payload.label || ""} — intrinsic torsion energy (normalized)</div>`;
+        container.innerHTML = svg;
+    }
+
+    function toggleLigandDoubleBond(ligandId, dbId) {
+        sendSiteValueToBackend("chemem:ToggleLigandDoubleBond", ligandId + "\u001f" + dbId);
+    }
+    function invertLigandChiral(ligandId, rsId) {
+        sendSiteValueToBackend("chemem:InvertLigandChiralCenter", ligandId + "\u001f" + rsId);
+    }
+
+    function renderLigandIsomers(payload) {
+        const dbList = document.getElementById("ligandDoubleBondList");
+        const chList = document.getElementById("ligandChiralList");
+        const status = document.getElementById("ligandIsomerStatus");
+        if (!dbList || !chList) return;
+        dbList.innerHTML = "";
+        chList.innerHTML = "";
+
+        const ligandId = payload ? payload.ligand_id : "";
+        const dbs = (payload && Array.isArray(payload.double_bonds)) ? payload.double_bonds : [];
+        const chiral = (payload && Array.isArray(payload.chiral_centers)) ? payload.chiral_centers : [];
+
+        dbs.forEach((db) => {
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = "Double bond " + db.label;
+            main.appendChild(title);
+            const chip = document.createElement("span");
+            chip.className = "stereo-chip";
+            chip.textContent = db.stereo;
+            main.appendChild(chip);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+            const btn = document.createElement("button");
+            btn.className = "tracked-action-button";
+            btn.textContent = "Flip E/Z";
+            btn.onclick = function() { toggleLigandDoubleBond(ligandId, db.id); };
+            actions.appendChild(btn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            dbList.appendChild(li);
+        });
+
+        chiral.forEach((ch) => {
+            const li = document.createElement("li");
+            li.className = "tracked-ligand-row";
+
+            const main = document.createElement("div");
+            main.className = "tracked-ligand-main";
+            const title = document.createElement("div");
+            title.className = "tracked-ligand-title";
+            title.textContent = "Chiral centre " + ch.label;
+            main.appendChild(title);
+            const chip = document.createElement("span");
+            chip.className = "stereo-chip";
+            chip.textContent = ch.rs;
+            main.appendChild(chip);
+
+            const actions = document.createElement("div");
+            actions.className = "tracked-ligand-actions";
+            const btn = document.createElement("button");
+            btn.className = "tracked-action-button";
+            btn.textContent = "Invert R/S";
+            btn.onclick = function() { invertLigandChiral(ligandId, ch.id); };
+            actions.appendChild(btn);
+
+            li.appendChild(main);
+            li.appendChild(actions);
+            chList.appendChild(li);
+        });
+
+        if (status) {
+            status.textContent = (dbs.length === 0 && chiral.length === 0)
+                ? "No double-bond or chiral stereo detected." : "";
+        }
+    }
+
+    function runSimulatedAnneling() {
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+
+        const fields = [
+            { id: 'simAnnCycles', label: 'Cycles', value: '1' },
+            { id: 'startTemp', label: 'Start Temperature', value: '0' },
+            { id: 'normTemp', label: 'Normalization Temperature', value: '300' },
+            { id: 'topTemp', label: 'Top Temperature', value: '315' },
+            { id: 'tempStep', label: 'Temperature Step', value: '1' },
+            { id: 'initialHeatingInterval', label: 'Initial Heating Interval', value: '100' },
+            { id: 'holdTopTempInterval', label: 'Hold Top Temperature Interval', value: '1000' },
+            { id: 'equilibriumTime', label: 'Equilibrium Time', value: '200' }
+        ];
+
+        const inputColumns = document.createElement('div');
+        inputColumns.className = 'input-columns';
+
+        fields.forEach(field => {
+            const div = document.createElement('div');
+            div.className = 'form-group';
+            div.innerHTML = `
+                <label for="${field.id}">${field.label}:</label>
+                <input type="number" id="${field.id}" name="${field.id}" value="${field.value}"/>
+            `;
+            inputColumns.appendChild(div);
+        });
+
+        const div = document.createElement('div');
+        div.className = 'form-group';
+        div.innerHTML = `
+            <label for="localMinimisation">Local Minimisation:</label>
+            <input type="checkbox" id="localMinimisation" name="localMinimisation" />
+        `;
+        inputColumns.appendChild(div);
+
+        simulationContent.appendChild(inputColumns);
+
+        const runButtonDiv = document.createElement('div');
+        runButtonDiv.className = 'run-button';
+        runButtonDiv.innerHTML = `
+            <button onclick="startSimulatedAnneling()">Run</button>
+        `;
+        simulationContent.appendChild(runButtonDiv);
+    }
+
+    function startSimulatedAnneling() {
+        const values = [];
+        const fieldIds = [
+            'simAnnCycles', 'startTemp', 'normTemp', 'topTemp', 'tempStep',
+            'initialHeatingInterval', 'holdTopTempInterval', 'equilibriumTime'
+        ];
+
+        fieldIds.forEach(id => {
+            const input = document.getElementById(id);
+            values.push(input ? parseInt(input.value) || 0 : 0);
+        });
+
+        const localMinimisation = document.getElementById('localMinimisation');
+        values.push(localMinimisation ? (localMinimisation.checked ? 1 : 0) : 0);
+
+        const valuesString = `[${values.join(', ')}]`;
+
+        sendParameterToBackend("chemem:RunSimulatedAnneling", "SimulatedAnnelingParameters", valuesString, "SimulatingAnnelingParameter");
+
+        const simulationContent = document.getElementById('SimulationContent');
+        simulationContent.innerHTML = '<legend>Simulation</legend>';
+    }
+
     function addRestraintToList(content, id, restrain_type) {
         // Get the UL element by its ID
         var ul = document.getElementById("activeRestraints");

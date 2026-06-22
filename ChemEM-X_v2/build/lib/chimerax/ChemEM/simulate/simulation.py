@@ -96,24 +96,25 @@ class SimulationContainer:
         if restraints_list is not None:
             for rest in restraints_list:
                 setattr(self, rest.name, rest.value)
-        #this is not complete!!!
-        if self.constrainProteinBackbone or self.constrainProtein:
-            self.simulation.add_force(ConstrainBackBone) 
+        #use getattr defaults so a constraint checkbox that was never sent does not
+        #raise AttributeError here.
+        if getattr(self, 'constrainProteinBackbone', 0) or getattr(self, 'constrainProtein', 0):
+            self.simulation.add_force(ConstrainBackBone)
             restraint_id = len(self.current_restraints)
             message = 'Protein BackBone Heavy Atoms'
             js_code = f'addRestraintToList("{message}", "{restraint_id}", "ConstrainBackBone");'
             self.js_code.append(js_code)
             self.current_restraints[restraint_id] = (message, restraint_id)
-        
-        if self.constrainProteinSidechain or self.constrainProtein:
-            self.simulation.add_force(ConstrainSideChain) 
+
+        if getattr(self, 'constrainProteinSidechain', 0) or getattr(self, 'constrainProtein', 0):
+            self.simulation.add_force(ConstrainSideChain)
             restraint_id = len(self.current_restraints)
             message = 'Protein Sidechain Heavy Atoms'
             js_code = f'addRestraintToList("{message}", "{restraint_id}", "ConstrainSidechain");'
             self.js_code.append(js_code)
             self.current_restraints[restraint_id] = (message, restraint_id)
-        
-        if self.constrainLigandAtoms:
+
+        if getattr(self, 'constrainLigandAtoms', 0):
             #TODO! check if there are any ligand atoms in the thing
             self.simulation.add_force(ConstrainSideChain) 
             restraint_id = len(self.current_restraints)
@@ -136,6 +137,9 @@ class SimulationContainer:
         self.simulation.add_force(HalogenBondForce)
         self.simulation.add_force(PiPiDistForce)
         self.simulation.add_force(CationPiForce)
+        #Driver for live torsion-preference looping (terms added per ligand torsion at
+        #job start). Must be added before set_simulation() builds the context.
+        self.simulation.add_force(TorsionDriveForce)
         self.simulation.set_simulation()
 
 
@@ -180,6 +184,9 @@ class Simulation:
         self.pipi_p_tug_rings = {}
         self.cation_pi_tugs = {}
         self.halogen_tug_atoms = {}
+        #Directory of the exported system (set by from_filepath); holds the optional
+        #torsion_profiles.json used for clean torsion-preference curves.
+        self.exported_dir = None
         #self.get_complex_structure()
         self.densmap_when_atoms_are_inside()
         
@@ -191,13 +198,18 @@ class Simulation:
         
         complex_structure = get_complex_structure(file_path)
         complex_system = get_complex_system(complex_structure, parameters = parameters)
-        
-        
-        return cls(session, 
+
+
+        obj = cls(session,
                    complex_system,
                    complex_structure,
                    densmap,
                    platform_name = platform_name)
+        #Remember the exported-system directory so the SimulationJob can load the
+        #clean intrinsic torsion profiles (torsion_profiles.json) written alongside
+        #complex_system.xml by the ChemEM backend export step.
+        obj.exported_dir = file_path
+        return obj
     
     
     def set_ions_active(self, active=True):
@@ -595,11 +607,11 @@ class Simulation:
         simulation.context.setPositions(self.complex_structure.positions)
         self.simulation = simulation
     
-    def minimise_system(self):
+    def minimise_system(self, maxIterations=200):
         #set temp here!!!
         #self.simulation.context.setVelocitiesToTemperature(self.temperature*unit.kelvin)
-        
-        self.simulation.minimizeEnergy(maxIterations=200)
+
+        self.simulation.minimizeEnergy(maxIterations=maxIterations)
     
     def get_positions(self):
         state = self.simulation.context.getState(getPositions=True)
@@ -644,6 +656,62 @@ class Simulation:
             self.simulation.step(self.heating_interval)
         self.temperature = new_temp
     
+    def drive_torsion(self, term_index, dihedral_indices, theta0_radians, k,
+                      cutoff_radians=0.0):
+        """Engage/update the torsion driver for one pre-added term. Cheap: update the
+        per-torsion parameters in the live context (no reinitialize, so velocities and
+        the running trajectory are preserved). cutoff_radians defines a free basin of
+        that half-width around theta0 (0 => pull toward theta0 everywhere)."""
+        force = self.torsion_drive_force
+        i, a, b, l = dihedral_indices
+        force.setTorsionParameters(term_index, i, a, b, l,
+                                   [float(k), float(theta0_radians),
+                                    float(np.cos(cutoff_radians))])
+        force.updateParametersInContext(self.simulation.context)
+
+    def release_torsion(self, term_index, dihedral_indices):
+        """Zero the driver for one term (k -> 0) so it stops biasing the dynamics."""
+        self.drive_torsion(term_index, dihedral_indices, 0.0, 0.0, 0.0)
+
+    def reseed_velocities(self):
+        """Draw fresh Maxwell-Boltzmann velocities at the current temperature. Used
+        after a rigid torsion move + minimise so the next MD step starts cleanly."""
+        try:
+            self.simulation.context.setVelocitiesToTemperature(
+                self.temperature * unit.kelvin)
+        except Exception:
+            import traceback
+            traceback.print_exc()
+
+    def pin_atoms_to_current(self, atom_indices, k):
+        """Strongly pin the given atoms to their CURRENT positions using the existing
+        tug force (one bond per atom, k=0 by default). Used to hold one side of a
+        torsion fixed so only the chosen side rotates. Batches a single
+        updateParametersInContext for the whole set."""
+        if not atom_indices:
+            return
+        ctx = self.simulation.context
+        pos = ctx.getState(getPositions=True).getPositions(asNumpy=True).value_in_unit(unit.angstrom)
+        for ai in atom_indices:
+            indices, _ = self.tug_force.getBondParameters(int(ai))
+            x0, y0, z0 = Quantity(
+                value=[float(pos[ai][0]), float(pos[ai][1]), float(pos[ai][2])],
+                unit=unit.angstrom)
+            self.tug_force.setBondParameters(int(ai), indices, [k, x0, y0, z0])
+        self.tug_force.updateParametersInContext(ctx)
+
+    def unpin_atoms(self, atom_indices):
+        """Release a previous pin_atoms_to_current (set tug_k back to 0, leaving the
+        stored target alone since it is inert at k=0)."""
+        if not atom_indices:
+            return
+        ctx = self.simulation.context
+        for ai in atom_indices:
+            indices, params = self.tug_force.getBondParameters(int(ai))
+            self.tug_force.setBondParameters(int(ai), indices,
+                                             [0.0, params[1], params[2], params[3]])
+        self.tug_force.updateParametersInContext(ctx)
+
     def update_tug_force_for_atom(self, atom_index, new_position, tug_k = None):
         if tug_k is None:
             tug_k = self.tug_k
@@ -1317,6 +1385,37 @@ class PsiAngleForce(PhiAnglelForce):
         return force
 
 
+class TorsionDriveForce(Force):
+    '''
+    Per-torsion driver used to rotate a ligand torsion toward a target minimum while
+    the simulation is running, instead of a rigid setPositions jump (which exploded the
+    integrator on the next step). One term is added per rotatable ligand torsion by the
+    SimulationJob once the RDKit<->OpenMM bridge exists; the force starts empty here.
+    drive_k is per-torsion so individual torsions can be engaged/released independently.
+    '''
+    name = 'torsion_drive_force'
+    @classmethod
+    def apply(cls, simulation_object):
+        return cls.get_force()
+
+    @staticmethod
+    def get_force():
+        #ISOLDE-style flat-bottom cosine torsion restraint (see ISOLDE
+        #FlatBottomTorsionRestraintForce): outside a +/-cutoff cone around theta0 it
+        #applies a gentle cosine restoring potential pulling toward theta0; inside the
+        #cone the energy is constant (zero force) so the bond can relax freely into the
+        #target basin. cos_cutoff = cos(cutoff_angle); cos_cutoff = 1 (cutoff 0) gives a
+        #pure cosine that pulls toward theta0 everywhere.
+        standard = '-k*cos(theta-theta0)'
+        flat = '-k*cos_cutoff'
+        switch = 'step(cos(theta-theta0)-cos_cutoff)'   # 1 when inside the cone
+        expr = 'select({0}, {1}, {2})'.format(switch, flat, standard)
+        force = CustomTorsionForce(expr)
+        for p in ('k', 'theta0', 'cos_cutoff'):
+            force.addPerTorsionParameter(p)
+        return force
+
+
 class ConstrainProtein(Force):
     name = 'constrain_protein'
     @classmethod 
@@ -1655,22 +1754,20 @@ def get_pipi_tug_indexes(model, atoms_to_index):
     if len(selected_atoms) <= 1:
         return None 
     
-    #get two distinct rings!!
-    rings = [i.rings() for i in selected_atoms if len(i.rings) > 0]
+    #get two distinct rings!!  (atom.rings is a method - must be called)
+    rings = [i.rings() for i in selected_atoms if len(i.rings()) > 0]
     flattened_rings = list(set([i for j in rings for i in j]))
-    
+
     if len(flattened_rings) == 2:
-        
+
         ring_pair_atoms = []
-        
+
         for ring in flattened_rings:
-           
-            
-            openff_indexes = [atoms_to_index[i] for i in ring.atoms]
+
+
+            openff_indexes = sorted([atoms_to_index[i] for i in ring.atoms])
             ring_pair_atoms.append([ring.atoms, openff_indexes])
-        
-        print('HAVE A RING PAIR......')
-        
+
         return ring_pair_atoms
     #TODO!! other things!!
 
@@ -1747,10 +1844,12 @@ def get_complex_structure(path):
 
     complex_structue_prmtop = os.path.join(path, 'complex_structure.prmtop')
     complex_structue_inpcrd = os.path.join(path, 'complex_structure.inpcrd')
-    if os.path.exists(complex_structue_prmtop) and os.path.exists(complex_structue_inpcrd ):
-        complex_structure = parmed.load_file(complex_structue_prmtop, xyz=complex_structue_inpcrd)
-    
-    return complex_structure
+    if not (os.path.exists(complex_structue_prmtop) and os.path.exists(complex_structue_inpcrd)):
+        raise FileNotFoundError(
+            f"Exported simulation files not found in '{path}' "
+            "(expected complex_structure.prmtop and complex_structure.inpcrd). "
+            "The ChemEM 'export' job likely failed - check the job output.")
+    return parmed.load_file(complex_structue_prmtop, xyz=complex_structue_inpcrd)
     
 
 

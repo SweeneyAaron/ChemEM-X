@@ -5,12 +5,18 @@ Created on Wed Oct 15 11:18:33 2025
 
 @author: aaron.sweeney
 """
+import json
 import numpy as np 
 from chimerax.markers import MarkerSet
 from chimerax.ChemEM.core.commands import Command
 from chimerax.ChemEM.binding_site.parameters import BindingSiteParameter
-from chimerax.ChemEM.binding_site.tools import BindingSiteChemEM, RenderBindingSite
+from chimerax.ChemEM.binding_site.tools import (BindingSiteChemEM,
+                                                RenderBindingSite,
+                                                convert_chimerax_atom_spec_to_chemem_atom_spec,
+                                                flatten)
 from chimerax.atomic import all_atoms
+from chimerax.ChemEM.dock.tools import ChemEMSetUp
+from chimerax.ChemEM.core.tools import ChemEMJob, IONFIXER_JOB , get_output_from_conf, launch_chemem_job
 
 #TODO! change Rendering!!
 
@@ -160,6 +166,41 @@ class BindingSiteFromMarker(Command):
                 
                 
                 
+class SetSolventSpecies(Command):
+    @classmethod
+    def run(cls, chemem, query):
+        chemem._solvent_species = str(query)
+
+
+class EnableSolventPlacement(Command):
+    @classmethod
+    def run(cls, chemem, query):
+        from chimerax.ChemEM.mouse_modes import PlaceSolventMouseMode
+
+        mm = chemem.session.ui.mouse_modes
+        # Remember the current right-button mode so it can be restored on disable
+        # (don't clobber it if our placement mode is already active).
+        prev = mm.mode(button='right')
+        if not isinstance(prev, PlaceSolventMouseMode):
+            chemem._prev_right_mouse_mode = prev
+
+        mode = PlaceSolventMouseMode(chemem)
+        mm.bind_mouse_mode(mouse_button='right', mode=mode)
+        chemem._solvent_mouse_mode = mode
+        chemem.run_js_code(
+            'setSolventStatus("Solvent placement ON \\u2014 right-click the model/map surface.");')
+
+
+class DisableSolventPlacement(Command):
+    @classmethod
+    def run(cls, chemem, query):
+        mm = chemem.session.ui.mouse_modes
+        mm.bind_mouse_mode(mouse_button='right',
+                           mode=getattr(chemem, '_prev_right_mouse_mode', None))
+        chemem._solvent_mouse_mode = None
+        chemem.run_js_code('setSolventStatus("Solvent placement off.");')
+
+
 class RemoveBindingSite(Command):
     @classmethod
     def run(cls, chemem, query):
@@ -179,33 +220,151 @@ class SetEditBindingSiteValue(Command):
 class AssignSelectedAtomToIonSite(Command):
     @classmethod
     def js_code(cls, atom_spec):
-        return f'addAtomSpecToIonFixer("{atom_spec}");'
+        return f"addAtomSpecToIonFixer({json.dumps(atom_spec)});"
+
+    @staticmethod
+    def _tracked_ligands_by_model_id(chemem):
+        tracked = {}
+        for ligand_id, record in (getattr(chemem, "_tracked_ligands", {}) or {}).items():
+            model = record.get("model")
+            model_id = record.get("model_id")
+            if model is not None and getattr(model, "id", None) is not None:
+                model_id = tuple(model.id)
+            if model_id is not None:
+                tracked[tuple(model_id)] = (ligand_id, record)
+        return tracked
+
+    @staticmethod
+    def _protein_atom_spec(atom):
+        chain_id = atom.residue.chain.chain_id
+        res_name = atom.residue.name
+        res_num = atom.residue.number
+        atom_name = atom.name
+        
+        return f"{chain_id}:{res_name}-{res_num}@{atom_name}"
+
+    @staticmethod
+    def _model_id_to_spec(model_id):
+        if model_id is None:
+            return None
+
+        if isinstance(model_id, (tuple, list)):
+            if len(model_id) == 0:
+                return None
+            return ".".join(str(i) for i in model_id)
+
+        model_id_text = str(model_id).strip()
+        if not model_id_text:
+            return None
+        return model_id_text.lstrip("#")
+
+    @staticmethod
+    def _ligand_atom_spec(atom, ligand_record):
+        matcher = ligand_record.get("atom_matcher")
+        if matcher is None:
+            return None
+
+        # Keep matcher validation so only tracked ligand atoms are accepted.
+        _rd_idx = matcher.get_by_atom(atom)
+        if _rd_idx is None:
+            return None
+
+        atom_model = getattr(atom, "structure", None)
+        model_id = getattr(atom_model, "id", None)
+        if model_id is None:
+            model_id = ligand_record.get("model_id")
+
+        model_id_spec = AssignSelectedAtomToIonSite._model_id_to_spec(model_id)
+        if model_id_spec is None:
+            return None
+
+        atom_name = atom.name
+        return f"#{model_id_spec}:LIG@{atom_name}"
 
     @classmethod
     def run(cls, chemem, query):
-        
         current_model = chemem.parameters.get_parameter('current_model')
-        if current_model is not None:
-            atoms = current_model.atoms
-            selected_atoms = atoms[atoms.selected]
-            print(f'Ion setter query... {query}')
+        tracked_by_model_id = cls._tracked_ligands_by_model_id(chemem)
 
-            if len(selected_atoms) != 1:
-                print('bad atom selection!!')
-                #TODO! return a js alert
+        selected = all_atoms(chemem.session)
+        selected = selected[selected.selected]
+
+        if len(selected) == 0:
+            return
+
+        valid_selected = []
+        for atom in selected:
+            atom_model = getattr(atom, "structure", None)
+            atom_model_id = tuple(getattr(atom_model, "id", ())) if atom_model is not None else None
+
+            if atom_model is current_model:
+                valid_selected.append(("protein", atom, None))
+                continue
+
+            if atom_model_id in tracked_by_model_id:
+                _ligand_id, ligand_record = tracked_by_model_id[atom_model_id]
+                valid_selected.append(("ligand", atom, ligand_record))
+
+        if len(valid_selected) != 1:
+            return
+
+        atom_kind, atom, ligand_record = valid_selected[0]
+        if atom_kind == "protein":
+            spec_string = cls._protein_atom_spec(atom)
+        else:
+            spec_string = cls._ligand_atom_spec(atom, ligand_record)
+            if spec_string is None:
                 return
 
-            # Use the first selected atom
-            atom = selected_atoms[0]
-            chain_id = atom.residue.chain.chain_id
-            res_name = atom.residue.name
-            res_num = atom.residue.number
-            atom_name = atom.name
+        site_index = getattr(query, "value", None)
+        if site_index is not None:
+            payload = json.dumps({"site_index": int(site_index), "atom_spec": spec_string})
+            chemem.run_js_code(cls.js_code(payload))
+            return
 
-            # Format as a spec string compatible with the backend parser
-            # e.g., /A:10@OD1
-            spec_string = f"/{chain_id}:{res_num}@{atom_name}"
-            print('------------------------------->',spec_string)
+        chemem.run_js_code(cls.js_code(spec_string))
+
+class AddIonSiteParameter(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        #if chemem.current_simualtion_id is not None:
+        chemem.ion_site_parameters.add(query)
+
+class AddIonSiteListParameter(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        #if chemem.current_simualtion_id is not None:
+        chemem.ion_site_parameters.add_list_parameter(query.name, query)
+
+class RunIonFixer(Command):
+    @classmethod 
+    def run(cls, chemem, query):
+        backend = chemem.parameters.get_value("chememBackendPath")
+        
+        if backend is not None:
             
-            chemem.run_js_code(cls.js_code(spec_string))
+            options = [(k,v.value) for k,v in chemem.ion_site_parameters.parameters.items() if type(v) != list and  v.value != 'protocol' ] 
+            protocols = [k for k,v in chemem.ion_site_parameters.parameters.items() if type(v) != list and v.value == "protocol"]
+            #should hold atom-sepc and exclude-spec
+            list_options = [ v for  k,v in chemem.ion_site_parameters.parameters.items() if type(v) == list]
+            flat_list = flatten(list_options)
+            converted_list_options, ligand_order = convert_chimerax_atom_spec_to_chemem_atom_spec(flat_list)
+            converted_list_options = [(param.name, param.value) for param in converted_list_options]
+            options = options + converted_list_options
 
+
+            chemem_setup = ChemEMSetUp.from_parameters_object(chemem.session, 
+                                       chemem.parameters, 
+                                       backend,
+                                       protocols,
+                                       options,
+                                       ligand_order=ligand_order,
+                                       tracked_ligands=getattr(chemem, "_tracked_ligands", None))
+            
+            command = chemem_setup.run_command
+
+            launch_chemem_job(chemem, command, IONFIXER_JOB, "Add Ions")
+
+            # Clear so the next run starts fresh (list params would otherwise
+            # accumulate across runs).
+            chemem.ion_site_parameters._clear()

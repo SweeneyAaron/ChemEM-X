@@ -95,6 +95,14 @@ class IonFixer:
         self.preopt_map_normalized = False
         self.preopt_map_zscore = False
         self.preopt_map_normalise_model = True
+
+    @staticmethod
+    def _is_ligand_atom_spec(spec):
+        spec_text = str(spec).strip()
+        if not spec_text:
+            return False
+        spec_upper = spec_text.upper()
+        return spec_upper.startswith("LIG") or ":LIG@" in spec_upper
                 
     def get_spec_atoms(self):
         self.spec_atoms = []
@@ -107,13 +115,13 @@ class IonFixer:
             raise RuntimeError("[ERROR] IonFixer requires at least one atom-spec argument")
 
         for spec in atom_specs:
-            if spec.startswith("LIG"):
+            if self._is_ligand_atom_spec(spec):
                 self.spec_atoms.append(self.system.ligand.get_atom_idx_from_spec(spec))
             else:
                 self.spec_atoms.append(self.system.protein.get_atom_idx_from_spec(spec))
 
         for spec in exclude_specs:
-            if spec.startswith("LIG"):
+            if self._is_ligand_atom_spec(spec):
                 self.exclude_atom_specs.append(self.system.ligand.get_atom_idx_from_spec(spec))
             else:
                 self.exclude_atom_specs.append(self.system.protein.get_atom_idx_from_spec(spec))
@@ -3774,4 +3782,3 @@ def find_atom_from_spec_by_coord_and_element(atom_spec, complex_structure, tol=1
         f"[ERROR] Could not find matching atom for element={target_elem} "
         f"at xyz={target_xyz.tolist()} within tol={tol}"
     )
-

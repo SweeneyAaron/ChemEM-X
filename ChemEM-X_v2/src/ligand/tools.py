@@ -9,9 +9,18 @@ Created on Tue Oct 14 15:47:18 2025
 import os
 import tempfile
 from rdkit import Chem 
-from dimorphite_dl import protonate_smiles
 from rdkit import Chem
 from rdkit.Chem import Draw, rdchem, AllChem
+
+try:
+    from dimorphite_dl import protonate_smiles as _DIMORPHITE_PROTONATE_SMILES
+except ImportError:
+    _DIMORPHITE_PROTONATE_SMILES = None
+
+try:
+    from dimorphite_dl import DimorphiteDL
+except ImportError:
+    DimorphiteDL = None
 
 class Protonate:
     
@@ -26,17 +35,31 @@ class Protonate:
         self.current_image_file = None
         
     def _protonate(self):
-        
-        
-        
-        
-       self.protonation_states = protonate_smiles(self.smiles,
-                                         ph_min=self.min_pH,
-                                         ph_max=self.max_pH,
-                                         max_variants=128,
-                                         label_states=False,
-                                         precision=self.pka_precision
-                                         )
+        if _DIMORPHITE_PROTONATE_SMILES is not None:
+            self.protonation_states = _DIMORPHITE_PROTONATE_SMILES(
+                self.smiles,
+                ph_min=self.min_pH,
+                ph_max=self.max_pH,
+                max_variants=128,
+                label_states=False,
+                precision=self.pka_precision,
+            )
+            return
+
+        if DimorphiteDL is not None:
+            dimorphite_dl = DimorphiteDL(
+                min_ph=self.min_pH,
+                max_ph=self.max_pH,
+                max_variants=128,
+                label_states=False,
+                pka_precision=self.pka_precision,
+            )
+            self.protonation_states = dimorphite_dl.protonate(self.smiles)
+            return
+
+        raise ImportError(
+            "dimorphite_dl API not found: expected protonate_smiles or DimorphiteDL"
+        )
                                          
         
         
@@ -54,13 +77,33 @@ class Protonate:
         if molecule is None:
             print("Invalid SMILES string.")
             return
-        
+
         # Compute 2D coordinates for the molecule
         Chem.rdDepictor.Compute2DCoords(molecule)
-        
+
         # Generate the image of the molecule
         img = Draw.MolToImage(molecule)
         return img
+
+    def draw_molecule_from_mol(self, mol):
+        """Generate a 2D depiction directly from an RDKit mol.
+
+        Tracked-ligand rdmols carry explicit hydrogens and a 3D conformer, which
+        would project into an ugly depiction. Strip the Hs, drop conformers, and
+        compute fresh 2D coordinates before rendering.
+        """
+        if mol is None:
+            return None
+
+        work = Chem.Mol(mol)
+        try:
+            work = Chem.RemoveHs(work)
+        except Exception:
+            work = Chem.Mol(mol)
+
+        work.RemoveAllConformers()
+        Chem.rdDepictor.Compute2DCoords(work)
+        return Draw.MolToImage(work)
     
     def save_image_temporarily(self, idx):
         # Create a temporary file with the suffix '.png' to ensure the file format is correct

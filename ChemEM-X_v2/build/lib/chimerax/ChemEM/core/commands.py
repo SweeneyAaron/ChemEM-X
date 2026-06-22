@@ -7,12 +7,37 @@ Created on Wed Mar 12 12:28:39 2025
 """
 import os
 import json
-from chimerax.ChemEM.core.tools import condense_path, validate_ligand_file
+from chimerax.ChemEM.core.tools import condense_path, validate_ligand_file, _build_atom_matcher_from_model_and_sdf, register_tracked_ligand
 from chimerax.ChemEM.core.parameters import PathParameter
 from chimerax import open_command
 from chimerax.atomic.structure import AtomicStructure
 from chimerax.map import Volume
 from rdkit import Chem
+from chimerax.core.commands import run as cx_run
+
+
+def _normalise_ligand_id(ligand_id):
+    return str(ligand_id).strip()
+
+
+def _pop_tracked_ligand(chemem, ligand_id):
+    tracked = getattr(chemem, "_tracked_ligands", None)
+    if not tracked:
+        return None
+
+    if ligand_id in tracked:
+        return tracked.pop(ligand_id)
+
+    ligand_id_key = _normalise_ligand_id(ligand_id)
+    if ligand_id_key in tracked:
+        return tracked.pop(ligand_id_key)
+
+    for tracked_id in list(tracked.keys()):
+        if _normalise_ligand_id(tracked_id) == ligand_id_key:
+            return tracked.pop(tracked_id)
+
+    return None
+
 
 class Command:
     @classmethod
@@ -187,9 +212,11 @@ class GetAvaliblePlatforms(Command):
         chemem.platforms_set = True
 
 class SetPlatform(Command):
-    @classmethod 
+    @classmethod
     def run(cls, chemem, query):
-        chemem.platform = query
+        #store the platform name string, not the Parameter wrapper, so it can be
+        #passed straight to Platform.getPlatformByName when the simulation builds.
+        chemem.platform = getattr(query, 'value', query)
 
 
 class UpdateModels(Command):
@@ -203,17 +230,36 @@ class UpdateModels(Command):
         
         return js_code
       
-    
+    @classmethod
+    def _tracked_setup_ligand_model_ids(cls, chemem):
+        tracked = set()
+        for rec in getattr(chemem, "setup_ligands", {}).values():
+            mdl = rec.get("model")
+            if mdl is not None and getattr(mdl, "id", None) is not None:
+                tracked.add(tuple(mdl.id))
+
+            mid = rec.get("model_id")
+            if mid is not None:
+                tracked.add(tuple(mid))
+        return tracked
+
     @classmethod
     def run(cls, chemem, query):
+        tracked_model_ids = cls._tracked_setup_ligand_model_ids(chemem)
         model_names = []
-        for index, model in enumerate(chemem.session.models): 
-            if isinstance(model, AtomicStructure):
-                model_names.append( cls.get_model_id( model ) )
+        for model in chemem.session.models:
+            if not isinstance(model, AtomicStructure):
+                continue
+            if tuple(model.id) in tracked_model_ids:
+                continue  # skip tracked SDF ligand helper models
+            model_names.append(cls.get_model_id(model))
+
         
         js_code = cls.js_code(model_names)
         chemem.run_js_code(js_code)
     
+
+
     @classmethod 
     def get_model_id(cls, model):
         return f'{".".join([str(i) for i in model.id]) } - {model.name}'
@@ -327,12 +373,15 @@ class AddLigandFile(Command):
 
     @classmethod 
     def run(cls, chemem, query):
-        #TODO! valid_smiles = cls.validate_smiles(query.value)
+        
         valid_file = validate_ligand_file(query.value)
         #valid_file = True
         if valid_file:
+
             chemem.parameters.add_list_parameter('Ligands', query)
-        
+            #tracking ligand models opened by sdf file (shared registration)
+            register_tracked_ligand(chemem, query.value,
+                                    ligand_id=_normalise_ligand_id(query.name))
         else:
             js_code = cls.js_code(query.value)
             chemem.run_js_code(js_code)
@@ -346,6 +395,22 @@ class RemoveLigand(Command):
     @classmethod 
     def run(cls, chemem, query):
         chemem.parameters.remove_list_parameter('Ligands', query)
+        if getattr(chemem, '_tracked_ligands') is not None:
+            record = _pop_tracked_ligand(chemem, query)
+            if record is None:
+                if hasattr(chemem, "push_tracked_ligands_to_ui"):
+                    chemem.push_tracked_ligands_to_ui()
+                return
+            model = record.get("model")
+            if (
+                model is not None
+                and getattr(model, "id", None) is not None
+                and chemem.session.models.have_id(tuple(model.id))
+            ):
+                chemem.session.models.remove([model])
+            if hasattr(chemem, "push_tracked_ligands_to_ui"):
+                chemem.push_tracked_ligands_to_ui()
+
 
 
 

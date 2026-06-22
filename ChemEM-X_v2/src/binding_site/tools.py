@@ -17,7 +17,7 @@ import networkx as nx
 from chimerax.map_data import ArrayGridData
 from chimerax.map import volume_from_grid_data
 import uuid
-
+from chimerax.ChemEM.core.parameters import StringParameter
 
 
 class RenderBindingSite:
@@ -755,3 +755,51 @@ def filter_exterior_shell_by_protein_atoms(
 
     return exterior_shell
 
+def convert_chimerax_atom_spec_to_chemem_atom_spec(atom_spec_list):
+    seen_ligands = []
+    converted_parameters = []
+    for atom_spec in atom_spec_list:
+        if 'LIG' in atom_spec.value:
+            ligand_model, atom_name = _split_chx_ligand_key(atom_spec.value)
+            if ligand_model in seen_ligands:
+                lig_id = seen_ligands.index(ligand_model)
+            else:
+                lig_id = len(seen_ligands)
+                seen_ligands.append(ligand_model)
+            
+            chemem_key = f'LIG:{lig_id}:{atom_name}'
+            new_param = StringParameter(atom_spec.name, chemem_key)
+            converted_parameters.append(new_param)
+        else:
+            chain_part, res_name, res_num, atom_name = _split_chx_protein_key(atom_spec.value)
+            chemem_key =  f'{chain_part}:{res_name}:{res_num}:{atom_name}'
+            new_param = StringParameter(atom_spec.name, chemem_key)
+            converted_parameters.append(new_param)
+    return converted_parameters, seen_ligands
+
+def flatten(xss):
+    return [x for xs in xss for x in xs]
+
+def _split_chx_protein_key(key):
+    # Expected format: "/{chain_id}:{res_name}-{res_num}@{atom_name}"
+    try:
+        chain_part, rest = key.split(":", 1)
+        residue_part, atom_name = rest.split("@", 1)
+        res_name, res_num = residue_part.rsplit("-", 1)
+        
+    except ValueError as exc:
+        raise ValueError(f"Invalid ChimeraX protein key: {key!r}") from exc
+
+    return chain_part, res_name, res_num, atom_name
+    
+    
+    
+
+def _split_chx_ligand_key(key):
+    # #1:LIG@O11
+    try:
+        atom_name = key.split('@')[-1]
+        ligand_model = key.split(':')[0].replace('#','')
+    except ValueError as exc:
+        raise ValueError(f"Invalid ChimeraX ligand key: {key!r}") from exc
+    return ligand_model, atom_name

@@ -9,9 +9,12 @@ Created on Thu Oct 16 10:31:33 2025
 import os 
 from chimerax.core.commands import run 
 from chimerax.atomic import Element
+from chimerax.atomic.colors import element_color
 import uuid
-from rdkit import Chem 
-import numpy as np 
+from rdkit import Chem
+from rdkit.Chem import AllChem
+import numpy as np
+from chimerax.ChemEM.core.tracked_ligands import write_tracked_ligand_sdf, safe_file_stem
 
 OutputError = "OutputError"
 MissingDataError = "MissingDataError"
@@ -81,21 +84,94 @@ class ChemEMSetUp:
         
         self.run_command = com
         
+    @staticmethod
+    def _normalise_model_id(model_id):
+        if model_id is None:
+            return None
+
+        if isinstance(model_id, (tuple, list)):
+            if len(model_id) == 0:
+                return None
+            return ".".join(str(i) for i in model_id)
+
+        model_id_text = str(model_id).strip()
+        if not model_id_text:
+            return None
+        return model_id_text.lstrip("#")
+
+    @classmethod
+    def _tracked_ligands_by_model_id(cls, tracked_ligands):
+        tracked = {}
+        for ligand_id, record in (tracked_ligands or {}).items():
+            model = record.get("model")
+            model_id = record.get("model_id")
+
+            if model is not None and getattr(model, "id", None) is not None:
+                model_id = tuple(model.id)
+
+            model_id_key = cls._normalise_model_id(model_id)
+            if model_id_key is not None:
+                tracked[model_id_key] = (ligand_id, record)
+        return tracked
+
+    @staticmethod
+    def _tracked_record_by_ligand_id(tracked_ligands, ligand_id):
+        if not tracked_ligands:
+            return None
+
+        if ligand_id in tracked_ligands:
+            return tracked_ligands[ligand_id]
+
+        ligand_id_text = str(ligand_id)
+        for tracked_id, record in tracked_ligands.items():
+            if str(tracked_id) == ligand_id_text:
+                return record
+        return None
+
+    @staticmethod
+    def _safe_file_stem(value):
+        return safe_file_stem(value)
+
+    @classmethod
+    def _write_tracked_ligand_to_inputs(cls, record, inputs_dir, suffix):
+        model = record.get("model")
+        model_name = getattr(model, "name", None) or "ligand"
+        model_id = None
+        if model is not None and getattr(model, "id", None) is not None:
+            model_id = tuple(model.id)
+        else:
+            model_id = record.get("model_id")
+
+        model_id_text = cls._normalise_model_id(model_id) or "unknown_model"
+        file_stem = cls._safe_file_stem(f"{model_name}_{model_id_text}_{suffix}")
+        ligand_path = os.path.join(inputs_dir, f"{file_stem}.sdf")
+        return write_tracked_ligand_sdf(record, ligand_path)
         
     
     
-    @classmethod 
-    def from_parameters_object(cls, session, 
+    @classmethod
+    def from_parameters_object(cls, session,
                                parameters_object,  #essentailly the conf file
                                backend,
                                protocols,
-                               options = [],
-                               selected_atoms = False):
-        
+                               options = None,
+                               selected_atoms = False,
+                               ligand_order = None,
+                               tracked_ligands = None,
+                               ligand_paths = None,   #explicit ligand SDF paths (refine tab)
+                               output_override = None):  #per-run output dir (refine tab)
+        if options is None:
+            options = []
+
         data = []
-        output = parameters_object.get_value("output")
-        
-        
+        #output_override lets a caller (the refine tab) isolate a run in its own
+        #subdirectory; it drives the conf 'output' value, the inputs/ dir and the
+        #conf-file location. Dock/ion-fixer don't pass it -> behaviour unchanged.
+        if output_override is not None:
+            output = output_override
+        else:
+            output = parameters_object.get_value("output")
+
         if output is not None:
             data.append(("output", output))
         
@@ -119,12 +195,55 @@ class ChemEMSetUp:
                 data.append(("protein", model_path))
                 
             
-            #-----get ligand input data 
+            #-----get ligand input data
             ligands =  parameters_object.get_parameter("Ligands")
-            #ligands are a list parameter so need to iterate through to extract data
-            if ligands is not None:
-                for lig in ligands:
-                    data.append(("ligand", lig.value))
+            if ligand_paths is not None:
+                #explicit caller-resolved ligand SDFs (refine tab): the caller has
+                #already written any tracked-ligand live coords to inputs/, so just
+                #pass the paths straight through, overriding the "Ligands" list.
+                for lig_path in ligand_paths:
+                    data.append(("ligand", lig_path))
+            elif ligand_order is not None:
+                tracked_by_model_id = cls._tracked_ligands_by_model_id(tracked_ligands)
+
+                for ligand_index, ordered_model_id in enumerate(ligand_order):
+                    model_id_key = cls._normalise_model_id(ordered_model_id)
+                    if model_id_key is None:
+                        raise ValueError(f"Invalid ligand model id in ligand_order: {ordered_model_id!r}")
+
+                    tracked_item = tracked_by_model_id.get(model_id_key)
+                    if tracked_item is None:
+                        raise ValueError(
+                            f"Tracked ligand with model id '{model_id_key}' not found for ion-fixer input order"
+                        )
+
+                    ligand_id, record = tracked_item
+                    ligand_path = cls._write_tracked_ligand_to_inputs(
+                        record,
+                        inputs_dir,
+                        f"{ligand_index}_{ligand_id}",
+                    )
+                    if ligand_path is None:
+                        raise ValueError(
+                            f"Unable to write tracked ligand '{ligand_id}' to inputs directory"
+                        )
+                    data.append(("ligand", ligand_path))
+            elif ligands is not None:
+                for ligand_index, lig in enumerate(ligands):
+                    tracked_record = cls._tracked_record_by_ligand_id(tracked_ligands, lig.name)
+                    if tracked_record is None:
+                        data.append(("ligand", lig.value))
+                        continue
+
+                    ligand_path = cls._write_tracked_ligand_to_inputs(
+                        tracked_record,
+                        inputs_dir,
+                        f"{ligand_index}_{lig.name}",
+                    )
+                    if ligand_path is None:
+                        data.append(("ligand", lig.value))
+                    else:
+                        data.append(("ligand", ligand_path))
             
             #-----get maps input data
             density_map = parameters_object.get_parameter("current_map")
@@ -320,6 +439,121 @@ def next_unused_chain_id(model):
                 return cid
     raise RuntimeError("No available chain IDs.")    
             
+
+# --- manual species placement (water / ions / polyatomic anions) ---------
+
+# Ion name -> element symbol (mirrors ChemEM's ION_TEMPLATE_INFO; the FF atom
+# name and residue name are the ion key itself).
+_ION_ELEMENTS = {
+    "MG": "Mg", "ZN": "Zn", "CA": "Ca", "MN": "Mn", "FE2": "Fe",
+    "FE": "Fe", "NA": "Na", "K": "K", "CL": "Cl", "LI": "Li",
+}
+
+# Placeable species. Keys must match the dropdown <option> values in template.html.
+#  - single-atom species use "atoms": [(atom_name, element_symbol), ...]
+#  - multi-atom species use "smiles" and are built heavy-atom-only via RDKit.
+SPECIES_TEMPLATES = {
+    "HOH": {"resname": "HOH", "atoms": [("O", "O")]},
+    **{k: {"resname": k, "atoms": [(k, v)]} for k, v in _ION_ELEMENTS.items()},
+    "SO4": {"resname": "SO4", "smiles": "[O-]S(=O)(=O)[O-]"},
+    "PO4": {"resname": "PO4", "smiles": "[O-]P(=O)([O-])[O-]"},
+    "NO3": {"resname": "NO3", "smiles": "[O-][N+](=O)[O-]"},
+    "CO3": {"resname": "CO3", "smiles": "[O-]C(=O)[O-]"},
+}
+
+
+def _species_chain_id(model, resname):
+    # reuse a chain that already holds this residue name, else a fresh chain id
+    for r in model.residues:
+        if r.name == resname:
+            return r.chain_id
+    return next_unused_chain_id(model)
+
+
+def _embed_smiles_heavy_atoms(smiles):
+    """3D-embed a SMILES with RDKit and return heavy-atom (elements, coords, bonds).
+
+    bonds is a list of (i, j, order) into the returned heavy-atom arrays.
+    """
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return None
+    mol = Chem.AddHs(mol)
+    if AllChem.EmbedMolecule(mol, randomSeed=0xf00d) != 0:
+        if AllChem.EmbedMolecule(mol, randomSeed=0xf00d, useRandomCoords=True) != 0:
+            return None
+    try:
+        AllChem.MMFFOptimizeMolecule(mol)
+    except Exception:
+        pass
+    mol = Chem.RemoveHs(mol)
+
+    conf = mol.GetConformer()
+    elements = [a.GetSymbol() for a in mol.GetAtoms()]
+    coords = np.array([list(conf.GetAtomPosition(i)) for i in range(mol.GetNumAtoms())], dtype=float)
+    bonds = [(b.GetBeginAtomIdx(), b.GetEndAtomIdx(), int(round(b.GetBondTypeAsDouble())))
+             for b in mol.GetBonds()]
+    return elements, coords, bonds
+
+
+def _style_atom(a):
+    # display as sticks, coloured by element (heteroatom colouring)
+    a.draw_mode = a.STICK_STYLE
+    a.color = element_color(a.element.number)
+    a.display = True
+
+
+def add_molecule_to_model(model, species_id, xyz):
+    """Add a placeable species (water / ion / anion) to an AtomicStructure at xyz.
+
+    Single-atom species are placed at xyz; multi-atom species are placed with
+    their heavy-atom centroid at xyz. Returns the new residue, or None if the
+    species is unknown or could not be built.
+    """
+    spec = SPECIES_TEMPLATES.get(species_id)
+    if spec is None:
+        return None
+
+    resname = spec["resname"]
+    chain_id = _species_chain_id(model, resname)
+    existing = [r.number for r in model.residues if r.chain_id == chain_id]
+    res_num = (max(existing) + 1) if existing else 1
+    res = model.new_residue(resname, chain_id, res_num)
+
+    if "atoms" in spec:
+        for atom_name, element_symbol in spec["atoms"]:
+            a = model.new_atom(atom_name, Element.get_element(element_symbol))
+            a.coord = (float(xyz[0]), float(xyz[1]), float(xyz[2]))
+            res.add_atom(a)
+            _style_atom(a)
+        return res
+
+    embedded = _embed_smiles_heavy_atoms(spec["smiles"])
+    if embedded is None:
+        res.delete()
+        return None
+    elements, coords, bonds = embedded
+    # translate so the heavy-atom centroid sits at xyz
+    coords = coords - coords.mean(axis=0) + np.asarray(xyz, dtype=float)
+
+    created_atoms = []
+    counts = {}
+    for element_symbol, coord in zip(elements, coords):
+        counts[element_symbol] = counts.get(element_symbol, 0) + 1
+        atom_name = f"{element_symbol}{counts[element_symbol]}"
+        a = model.new_atom(atom_name, Element.get_element(element_symbol))
+        a.coord = (float(coord[0]), float(coord[1]), float(coord[2]))
+        res.add_atom(a)
+        _style_atom(a)
+        created_atoms.append(a)
+
+    for i, j, order in bonds:
+        b = model.new_bond(created_atoms[i], created_atoms[j])
+        if hasattr(b, "order"):
+            b.order = order
+
+    return res
+
 
 def get_atom_match_object(res, lig_file):
     mol = mol_from_sdf(lig_file)

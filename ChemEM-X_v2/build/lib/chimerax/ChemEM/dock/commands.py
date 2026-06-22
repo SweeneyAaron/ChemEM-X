@@ -8,7 +8,7 @@ Created on Thu Oct 16 10:25:46 2025
 
 from chimerax.ChemEM.core.commands import Command
 from chimerax.ChemEM.dock.tools import ChemEMSetUp, get_dock_results,  get_mmgbsa_scores, add_residue_to_model,  get_atom_match_object
-from chimerax.ChemEM.core.tools import ChemEMJob, CHEMEM_JOB , get_output_from_conf
+from chimerax.ChemEM.core.tools import ChemEMJob, CHEMEM_JOB , get_output_from_conf, launch_chemem_job, register_tracked_ligand
 from chimerax.core.commands import run 
 import json
 import os
@@ -37,17 +37,7 @@ class RunDocking(Command):
             
             
             command = chemem_setup.run_command
-            job = ChemEMJob(chemem.session,
-                            command,
-                            CHEMEM_JOB 
-                            )
-            
-            job_data = {"id": job.id, "status": "running"}
-            job_data_json = json.dumps(job_data)
-            js_code = f"addJob({job_data_json});"
-            chemem.run_js_code(js_code)
-            job.start() 
-            chemem.job_handeler.add_job(job)
+            launch_chemem_job(chemem, command, CHEMEM_JOB, "Dock", load_type="dock")
             
             
 class RemoveJob(Command):
@@ -156,15 +146,18 @@ class ClearDockSolutions(Command):
 class AddDockSolutionToStructure(Command):
     @classmethod
     def run(cls, chemem, query):
+        from chimerax.ChemEM.simulate.tools import include_tracked_ligand_in_simulation
         if chemem.dock_results is not None:
             mdl = chemem.dock_results._gui.get(query.value, None)
-            protein = chemem.parameters.get_parameter('current_model')
-            if mdl is not None and protein is not None:
-                res = add_residue_to_model(protein, mdl)
-                
-                atom_matched_res = get_atom_match_object(res, query.value)
-                chemem.added_ligands[res] = atom_matched_res
-                #need to assign the atom connections, here
+            # Register the docked solution as a tracked ligand (reusing the
+            # already-loaded solution model when present, else opening its SDF)
+            # so it appears in the tracked-ligand list and is torsion-capable,
+            # then include it in the simulation. BuildSimulation adds the LIG
+            # residue at build time from the 'Ligands' list, so we no longer add
+            # a residue here (which would double-add it).
+            ligand_id = register_tracked_ligand(chemem, query.value, model=mdl)
+            if ligand_id is not None:
+                include_tracked_ligand_in_simulation(chemem, ligand_id)
                 
                 
                     

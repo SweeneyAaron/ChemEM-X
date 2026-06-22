@@ -4,45 +4,12 @@
 Created on Wed Mar 12 22:50:15 2025
 
 @author: aaron.sweeney
+
+The mask tab now drives the ChemEM ``alpha_mask`` protocol via the backend and
+collects its options using the standard parameter classes in
+``chimerax.ChemEM.core.parameters`` (FloatParameter / IntParameter /
+StringParameter / BooleanParameter), added through the ``AddMaskParameter``
+command. The previous mask-specific parameter classes (``MaskOptionsParameter``,
+``ConfidenceMapParameter``) belonged to the retired native masking path and have
+been removed.
 """
-
-from chimerax.ChemEM.core.parameters import Parameter 
-
-
-class ConfidenceMapParameter(Parameter):
-    def __init__(self, name, value):
-        self.name = name 
-        self.value = value 
-    
-    @classmethod 
-    def get_from_query(cls, query):
-        if query['class'] == cls.__name__:
-            name = query['id']
-            value = cls.get_value(query['value'])
-            return cls(name, value)
-
-class MaskOptionsParameter(Parameter):
-    def __init__(self, name, value):
-        self.name = name 
-        self.value = value 
-    
-    @classmethod 
-    def get_from_query(cls, query):
-        if query['class'] == cls.__name__:
-            value = cls.get_value(query['value'])
-            c =  cls(query['id'],
-                       value)
-            c.use_confidence_map = value[0]
-
-            return c
-     
-    @classmethod 
-    def get_value(cls, value):
-        values = value.split('|')
-        value = [str(i) for i in values]
-        return value
-    
-
-
-    
-    

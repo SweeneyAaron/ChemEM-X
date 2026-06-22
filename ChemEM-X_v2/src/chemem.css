@@ -217,7 +217,8 @@ button[type="reset"]:hover {
 }
 
 #ligandList,
-#ligandSimulationList {
+#ligandSimulationList,
+#trackedLigandList {
     list-style-type: none;
     padding: 8px;
     max-height: 100px;
@@ -229,7 +230,8 @@ button[type="reset"]:hover {
 }
 
 #ligandList li,
-#ligandSimulationList li {
+#ligandSimulationList li,
+#trackedLigandList li {
     cursor: default;
     padding: 5px;
     border-bottom: 1px solid #e1e1e1;
@@ -239,7 +241,8 @@ button[type="reset"]:hover {
 }
 
 #ligandList li:hover,
-#ligandSimulationList li:hover {
+#ligandSimulationList li:hover,
+#trackedLigandList li:hover {
     background-color: #e9eef7;
 }
 
@@ -254,6 +257,92 @@ button[type="reset"]:hover {
 #ligandList li:hover .trash-icon,
 #ligandSimulationList li:hover .trash-icon{
     visibility: visible; /* Only visible on hover */
+}
+
+#trackedLigandList li.tracked-empty {
+    color: #666;
+    font-style: italic;
+}
+
+#trackedLigandList li.tracked-ligand-row {
+    align-items: flex-start;
+    gap: 12px;
+}
+
+.tracked-ligand-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.tracked-ligand-title {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.tracked-ligand-meta {
+    margin-top: 2px;
+    color: #5b5b5b;
+    font-size: 0.85em;
+    overflow-wrap: anywhere;
+}
+
+.tracked-status-chip {
+    display: inline-block;
+    margin-top: 6px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.tracked-status-chip.dirty {
+    background-color: #fff2cc;
+    color: #7a4f00;
+}
+
+.tracked-status-chip.clean {
+    background-color: #dff3e7;
+    color: #1f5e35;
+}
+
+.tracked-ligand-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.tracked-action-button {
+    text-transform: none;
+    padding: 6px 10px;
+    font-size: 0.78em;
+}
+
+.tracked-action-button.secondary {
+    background-color: #6b7e7d;
+}
+
+.tracked-action-button.secondary:hover {
+    background-color: #829392;
+}
+
+#trackedLigandStatus {
+    margin-top: 10px;
+    min-height: 1.2em;
+    font-size: 0.9em;
+}
+
+#trackedLigandStatus.info {
+    color: #36545a;
+}
+
+#trackedLigandStatus.success {
+    color: #1f5e35;
+}
+
+#trackedLigandStatus.error {
+    color: #8b1e1e;
 }
 
 .centroid-input-group {
@@ -455,6 +544,25 @@ button[type="reset"]:hover {
     color: #555;
 }
 
+.ligand-drop-zone {
+    border: 1px dashed transparent;
+    border-radius: 4px;
+    padding: 4px;
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.ligand-drop-zone.drag-over {
+    border-color: #3f51b5;
+    background-color: #e8eaf6;
+}
+
+.drop-hint {
+    margin-left: 10px;
+    font-size: 12px;
+    color: #9c9c9c;
+    font-style: italic;
+}
+
 .scrollable-list-style {
     list-style-type: none;
     padding: 8px;
@@ -488,13 +596,18 @@ button[type="reset"]:hover {
 
 .job-item {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
     padding: 10px;
     margin: 10px 0;
     border-radius: 8px;
     background-color: #f9f9f9;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.job-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
 }
 
 .status-indicator {
@@ -503,32 +616,72 @@ button[type="reset"]:hover {
     border-radius: 50%;
     margin-right: 10px;
     background-color: gray;
+    flex: 0 0 auto;
 }
 
 .pending {
     background-color: grey;
-    
 }
 
 .running {
     background-color: green;
-    
 }
 
 .completed {
     background-color: blue;
-    
 }
 
 .failed {
     background-color: red;
-    
 }
 
-.job-item span {
+/* Animated spinner for the running state. */
+.status-indicator.running {
+    background-color: transparent;
+    border: 2px solid rgba(0, 128, 0, 0.25);
+    border-top-color: green;
+    box-sizing: border-box;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.job-info {
     flex: 1;
     font-family: Arial, sans-serif;
     font-size: 14px;
+}
+
+.job-output-toggle {
+    flex: 0 0 auto;
+    margin-left: 8px;
+    font-size: 12px;
+    color: #0056b3;
+}
+
+/* Per-job collapsible live-output panel. */
+.job-output {
+    margin-top: 8px;
+    max-height: 220px;
+    overflow-y: auto;
+    background-color: #1e1e1e;
+    color: #d4d4d4;
+    border-radius: 6px;
+    padding: 8px;
+    font-family: "Menlo", "Consolas", monospace;
+    font-size: 12px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.job-output-line {
+    line-height: 1.35;
+}
+
+.job-output-error {
+    color: #ff7b72;
 }
 
 .load-btn, .cancel-btn {
@@ -541,10 +694,26 @@ button[type="reset"]:hover {
     cursor: pointer;
     font-size: 12px;
     transition: background-color 0.2s ease;
+    flex: 0 0 auto;
 }
 
 .load-btn:hover, .cancel-btn:hover {
     background-color: #0056b3;
+}
+
+/* Count badge on the Jobs tab button. */
+.jobs-badge {
+    display: inline-block;
+    margin-left: 6px;
+    min-width: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background-color: #e53935;
+    color: #fff;
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+    vertical-align: middle;
 }
 
 .icon {
@@ -785,4 +954,222 @@ details.folder summary {
   margin-left: 6px;    /* shift away from the left edge */
 }
 
+/* ===================================================================
+   Save points (Feature 1) + Torsion preferences (Feature 2)
+   =================================================================== */
+#savePointsList,
+#selectedTorsionList,
+#simulationLigandPicker {
+    list-style-type: none;
+    padding: 8px;
+    max-height: 140px;
+    overflow-y: auto;
+    border: 1px solid #c5cae9;
+    border-radius: 4px;
+    margin-top: 10px;
+    background-color: #f8f8f8;
+}
 
+#savePointsList li,
+#selectedTorsionList li,
+#simulationLigandPicker li {
+    cursor: default;
+    padding: 5px;
+    border-bottom: 1px solid #e1e1e1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#savePointsList li.tracked-empty,
+#selectedTorsionList li.tracked-empty,
+#simulationLigandPicker li.tracked-empty {
+    color: #666;
+    font-style: italic;
+    display: block;
+}
+
+.ligand-picker-hint {
+    font-size: 0.82em;
+    color: #5b5b5b;
+    margin: 4px 0 0;
+}
+
+#savePointsList li.is-dirty {
+    background-color: #fff2cc;
+}
+
+.sim-status {
+    display: none;
+    margin-top: 8px;
+    padding: 6px 8px;
+    font-size: 0.85em;
+    color: #36545a;
+    background-color: #eef4f4;
+    border-radius: 4px;
+}
+
+.torsion-controls {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+#torsionProfileContainer {
+    margin-top: 10px;
+}
+
+.torsion-svg {
+    background-color: #ffffff;
+    border: 1px solid #c5cae9;
+    border-radius: 4px;
+}
+
+.torsion-curve {
+    stroke: #3f51b5;
+    stroke-width: 1.5;
+}
+
+.torsion-axis-line {
+    stroke: #999;
+    stroke-width: 1;
+}
+
+.torsion-axis {
+    fill: #555;
+    font-size: 9px;
+}
+
+.torsion-min-local {
+    fill: #2e7d32;
+}
+
+.torsion-min-global {
+    fill: #c62828;
+    stroke: #7a1414;
+    stroke-width: 1;
+}
+
+.torsion-cursor {
+    stroke: #ff9800;
+    stroke-width: 1.5;
+    stroke-dasharray: 3 2;
+}
+
+.torsion-caption {
+    margin-top: 4px;
+    font-size: 0.78em;
+    color: #5b5b5b;
+}
+
+.torsion-empty {
+    color: #666;
+    font-style: italic;
+    padding: 8px 0;
+}
+
+#ligandTorsionProfileContainer {
+    margin-top: 10px;
+}
+
+.ligand-torsion-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+#ligandIsomerPanel {
+    margin-top: 18px;
+}
+
+.stereo-chip {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 0.75em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    background-color: #e3e7fb;
+    color: #2a356e;
+}
+
+/* ---------------- Score tab ---------------- */
+.score-help {
+    color: #5b5b5b;
+    font-size: 0.88em;
+    margin: 4px 0 10px 0;
+}
+
+.score-section-header {
+    font-weight: 600;
+    margin: 10px 0 4px 0;
+    color: #004542;
+}
+
+.score-picker {
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 4px 6px;
+    border: 1px solid #d7dee2;
+    border-radius: 4px;
+    background-color: #f8f8f8;
+}
+
+.score-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 18px;
+}
+
+.score-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.score-table-container {
+    overflow-x: auto;
+    margin-top: 6px;
+}
+
+table.score-table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.85em;
+}
+
+table.score-table th,
+table.score-table td {
+    border: 1px solid #d7dee2;
+    padding: 4px 8px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+table.score-table th:first-child,
+table.score-table td:first-child,
+table.score-table th:nth-child(2),
+table.score-table td:nth-child(2) {
+    text-align: left;
+}
+
+table.score-table thead th {
+    background-color: #004542;
+    color: white;
+    position: sticky;
+    top: 0;
+}
+
+table.score-table tbody tr:nth-child(even) {
+    background-color: #f1f5f4;
+}
+
+table.score-table tbody tr:hover {
+    background-color: #e9eef7;
+}
