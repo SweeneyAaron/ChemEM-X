@@ -256,9 +256,9 @@ class ChemEMSetUp:
                 data.append(("densmap", density_map.path))
                 data.append(("resolution", resolution))
                 
-            #-----get centroids
-            binding_sites = parameters_object.get_parameter("binding_sites")
-            
+            #-----get centroids (only sites the user added to the conf are docked)
+            binding_sites = parameters_object.get_parameter("binding_sites_conf")
+
             if binding_sites is not None:
                 for site in binding_sites:
                     x,y,z = site.centroid

@@ -226,12 +226,16 @@ class Parameters:
             del self.parameters[key]
     
     def clear_binding_site_tabs(self, chemem):
-        sites = self.get_parameter('binding_sites')
-        if sites is not None:
-            for site in sites:
-                
-                js_code = f'triggerDeleteButtonClickOnBindingSite("{site.name}");'
-                chemem.run_js_code(js_code)
+        # Drop both the candidate and conf binding-site stores and clear their UI lists.
+        self.parameters.pop('binding_sites', None)
+        self.parameters.pop('binding_sites_conf', None)
+        if getattr(chemem, 'rendered_site', None) is not None:
+            try:
+                chemem.rendered_site.reset()
+            except Exception:
+                pass
+            chemem.rendered_site = None
+        chemem.run_js_code('if (typeof clearBindingSiteLists === "function") clearBindingSiteLists();')
 
     def copy(self):
         return copy.copy(self)

@@ -137,7 +137,7 @@ class CHEMEM(HtmlToolInstance):
         self.html_view.page().loadFinished.connect(self._install_ligand_drop_filter)
         QTimer.singleShot(0, self._install_ligand_drop_filter)
 
-        session.metadata = self
+        #session.metadata = self
 
     def _install_ligand_drop_filter(self, *args):
         from Qt.QtWidgets import QWidget
@@ -350,7 +350,7 @@ class CHEMEM(HtmlToolInstance):
             ligand_id = pending.get("ligand_id")
             run_dir = pending.get("dir")
             if job.process.returncode != 0:
-                self.run_js_code('alert("Ligand torsion export failed - see the ChemEM job output for details.");')
+                self.run_js_code('showToast("Ligand torsion export failed - see the ChemEM job output for details.", "error");')
                 return
             if ligand_id and run_dir:
                 if not hasattr(self, "_ligand_torsion_export_dirs") or self._ligand_torsion_export_dirs is None:
@@ -365,7 +365,7 @@ class CHEMEM(HtmlToolInstance):
             # the prmtop/inpcrd files; otherwise surface a clear message instead
             # of crashing on the missing files.
             if job.process.returncode != 0:
-                self.run_js_code('alert("Simulation export failed - see the ChemEM job output for details.");')
+                self.run_js_code('showToast("Simulation export failed - see the ChemEM job output for details.", "error");')
                 return
 
             self.current_simulation = get_simulation(self.session,

@@ -9,22 +9,47 @@
 </head>
 <body>
 
-     <h1>
-         <img src="img/chemEM_logo_transparent.png" alt="ChemEM" style="max-height: 60px;">
-     </h1>
-     <!-- Tab Links -->
-     <div class="tab">
-         <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'SetupTab'); getAvalilblePlatforms()">Setup</button>
-         <button class="tablinks" onclick="openTab(event, 'LigandsTab')">Ligands</button>
-         <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Sites</button>
-         <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
-         <button class="tablinks" onclick="openTab(event, 'DockTab')">Dock</button>
-         <button class="tablinks" onclick="openTab(event, 'RefineTab')">Refine</button>
-         <button class="tablinks" onclick="openTab(event, 'BuildTab')">Build</button>
-         <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
-         <button class="tablinks" onclick="openTab(event, 'ScoreTab')">Score</button>
-         <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs<span id="jobsBadge" class="jobs-badge" style="display:none;">0</span></button>
+     <!-- Toast notifications host -->
+     <div id="toastHost" class="toast-host" aria-live="polite"></div>
 
+     <!-- App bar: brand + live workflow context -->
+     <div class="app-bar">
+         <img class="app-bar__logo" src="img/chemEM_logo_transparent.png" alt="ChemEM">
+         <div class="context-chips" id="contextChips">
+             <span class="context-chip is-empty" id="chipModel"><span class="context-chip__label">Model</span><span class="context-chip__value">&mdash;</span></span>
+             <span class="context-chip is-empty" id="chipMap"><span class="context-chip__label">Map</span><span class="context-chip__value">&mdash;</span></span>
+             <span class="context-chip is-empty" id="chipRes"><span class="context-chip__label">Res</span><span class="context-chip__value">&mdash;</span></span>
+             <span class="context-chip is-empty" id="chipOutput"><span class="context-chip__label">Output</span><span class="context-chip__value">&mdash;</span></span>
+         </div>
+     </div>
+
+     <!-- Tab Links, grouped by workflow phase -->
+     <div class="tab">
+         <div class="tab-group">
+             <span class="tab-group__label">Prepare</span>
+             <div class="tab-group__btns">
+                 <button class="tablinks" id="defaultOpen" onclick="openTab(event, 'SetupTab'); getAvalilblePlatforms()">Setup<span class="tab-check" id="setupCheck"></span></button>
+                 <button class="tablinks" onclick="openTab(event, 'LigandsTab')">Ligands</button>
+                 <button class="tablinks" onclick="openTab(event, 'BindingSiteTab')">Binding Sites</button>
+                 <button class="tablinks" onclick="openTab(event, 'MaskTab')">Mask</button>
+             </div>
+         </div>
+         <div class="tab-group">
+             <span class="tab-group__label">Compute</span>
+             <div class="tab-group__btns">
+                 <button class="tablinks" onclick="openTab(event, 'DockTab')">Dock</button>
+                 <button class="tablinks" onclick="openTab(event, 'RefineTab')">Refine</button>
+                 <button class="tablinks" onclick="openTab(event, 'BuildTab')">Build</button>
+                 <button class="tablinks" onclick="openTab(event, 'RunSimulationTab')">Simulate</button>
+             </div>
+         </div>
+         <div class="tab-group">
+             <span class="tab-group__label">Analyze</span>
+             <div class="tab-group__btns">
+                 <button class="tablinks" onclick="openTab(event, 'ScoreTab')">Score</button>
+                 <button class="tablinks" onclick="openTab(event, 'JobsTab')">Jobs<span id="jobsBadge" class="jobs-badge" style="display:none;">0</span></button>
+             </div>
+         </div>
      </div>
       
      <div id="SetupTab" class="tabcontent">
@@ -60,7 +85,7 @@
                  </fieldset>
              </div> <!-- end of container-->
              
-            <div class="container" id="general">
+            <div class="container" id="model-parameters">
                 <fieldset>
                     <legend>Model parameters</legend>
                         <label for="models">Protein:</label>
@@ -103,14 +128,13 @@
                         <label for="ligandList">Added Ligands:</label>
                         <ul id="ligandList"></ul>
                     </div>
-                    
-                    
-                    <!-- List for added centroids -->
+
+                    <!-- Conf binding sites: only these are docked; promoted via the + Add icon -->
                     <div class="form-group">
                         <label for="centroidList">Added Binding Sites:</label>
                         <ul id="centroidList"></ul>
                     </div>
-                    
+
                 </fieldset>
             </div><!-- end of container-->
     </div><!-- end of tab -->
@@ -125,7 +149,7 @@
         <div class="container" id="tracked-ligands">
             <fieldset>
                 <legend>Tracked SDF Ligands</legend>
-                <label style="font-weight: bold;">Loaded SDF Ligands (movable + savable)</label>
+                <label class="field-label">Loaded SDF Ligands (movable + savable)</label>
                 <ul id="trackedLigandList"></ul>
                 <div id="trackedLigandStatus"></div>
             </fieldset>
@@ -144,7 +168,7 @@
                 <!-- Flick through exported torsion minima -->
                 <div id="ligandTorsionPanel">
                     <div class="ligand-torsion-header">
-                        <label style="font-weight: bold;">Rotatable-bond minima</label>
+                        <label class="field-label">Rotatable-bond minima</label>
                         <button type="button" class="tracked-action-button" onclick="exportLigandTorsions()">Export torsions</button>
                     </div>
                     <div id="ligandTorsionStatus" class="torsion-empty"></div>
@@ -154,7 +178,7 @@
 
                 <!-- Change isomers (E/Z and R/S) -->
                 <div id="ligandIsomerPanel">
-                    <label style="font-weight: bold;">Stereochemistry</label>
+                    <label class="field-label">Stereochemistry</label>
                     <ul id="ligandDoubleBondList"></ul>
                     <ul id="ligandChiralList"></ul>
                     <div id="ligandIsomerStatus" class="torsion-empty"></div>
@@ -168,13 +192,13 @@
                 
                 <div class="form-group pH-group">
                     <label for="pHMax">pH max:</label>
-                    <input type="number" id="pHMax" name="pHMax" step="0.01" value="8.4" style="width: 100px;">
+                    <input type="number" id="pHMax" name="pHMax" step="0.01" value="8.4" class="input-narrow">
             
                     <label for="pHMin">pH min:</label>
-                    <input type="number" id="pHMin" name="pHMin" step="0.01" value="6.4" style="width: 100px;">
+                    <input type="number" id="pHMin" name="pHMin" step="0.01" value="6.4" class="input-narrow">
             
                     <label for="pHSTD">pKa Precision:</label>
-                    <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" style="width: 100px;">
+                    <input type="number" id="pHSTD" name="pHSTD" step="0.01" value="1.0" class="input-narrow">
                 </div>
                 <!-- Source selector: a tracked SDF ligand OR the typed SMILES below -->
                 <div class="form-group input-with-button">
@@ -195,7 +219,7 @@
         <div class="container" id="protonation-states">
         <fieldset>
             <legend>Protonation States</legend>
-            <label style="font-weight: bold;">Protonated SMILES:</label>
+            <label class="field-label">Protonated SMILES:</label>
             <ul id="protonatedSmilesList"></ul>
         </fieldset>
         </div>
@@ -205,25 +229,60 @@
     <div id="BindingSiteTab" class="tabcontent">
          <div class="container" id="binding-site-from-centroid">
              <legend>Detect Binding sites</legend>
-             <button type="button" onclick="activateMarkerPlacement()">Define From Marker</button>
-             <button type="button" onclick="autoSiteFinder()">Autodetect sites</button>
+             <div class="btn-row">
+                 <button type="button" onclick="activateMarkerPlacement()">Define From Marker</button>
+                 <button type="button" onclick="autoSiteFinder()">Autodetect sites</button>
+             </div>
          </div>
-         
+         <!-- 
+         <div class="container" id="manual-binding-site-entry">
+             <legend>Add binding site</legend>
+             <p class="help-text">Enter a centroid and box size, or use Define From Marker / Autodetect above. Added sites are used directly for docking.</p>
+             <label class="field-label">Centroid (Å):</label>
+             <div class="centroid-input-group">
+                 <label for="centroidX">X:</label>
+                 <input type="number" id="centroidX" name="centroidX" step="0.001">
+                 <label for="centroidY">Y:</label>
+                 <input type="number" id="centroidY" name="centroidY" step="0.001">
+                 <label for="centroidZ">Z:</label>
+                 <input type="number" id="centroidZ" name="centroidZ" step="0.001">
+             </div>
+             <label class="field-label">Box size (Å):</label>
+             <div class="manual-binding-site-inputs">
+                 <div>
+                     <label for="QuickboxSizeX">X:</label>
+                     <input type="number" id="QuickboxSizeX" value="20" step="0.5">
+                 </div>
+                 <div>
+                     <label for="QuickboxSizeY">Y:</label>
+                     <input type="number" id="QuickboxSizeY" value="20" step="0.5">
+                 </div>
+                 <div>
+                     <label for="QuickboxSizeZ">Z:</label>
+                     <input type="number" id="QuickboxSizeZ" value="20" step="0.5">
+                 </div>
+             </div>
+             <div class="btn-row">
+                 <button type="button" class="add-button" onclick="addManualBindingSite()">Add</button>
+             </div>
+         </div>
+        -->
+
          <div class="container" id="manual-binding-site">
-             
+
              <fieldset>
-             
+
                  <legend>Binding Sites</legend>
-                 <label style="font-weight: bold;">Binding Sites</label>
+                 <label class="field-label">Defined binding sites</label>
                  <ul id="manualBindingSitesList"></ul>
-             
+
              </fieldset>
          </div>
          
          <div class="container" id="add-solvent-molecules">
             <fieldset>
             <legend>Place Solvent / Ions</legend>
-                <p style="margin:4px 0; color:#555; font-size:0.9em;">
+                <p class="help-text">
                     Pick a species, then right-click on the model or map surface to place it exactly where you click.
                 </p>
                 <div class="form-group">
@@ -253,7 +312,7 @@
                     </select>
                 </div>
                 <button type="button" id="solventPlacementToggle" onclick="toggleSolventPlacement()">Enable Solvent Placement</button>
-                <div id="addSolventStatus" style="margin-top:10px; color:#555; font-size:0.95em;"></div>
+                <div id="addSolventStatus" class="help-text"></div>
              </fieldset>
          </div>
 
@@ -271,12 +330,12 @@
                     </div>
 
                     <div class="form-group">
-                        <label style="font-weight: bold;">Coordination Preview</label>
-                        <div id="ionGeometryCanvas" style="border: 1px solid #c5cae9; border-radius: 8px; background: #f8f8f8; min-height: 320px; padding: 8px;"></div>
+                        <label class="field-label">Coordination Preview</label>
+                        <div id="ionGeometryCanvas" class="ion-canvas"></div>
                     </div>
 
                     <button type="button" id="addIonRunButton" onclick="runAddIonFromUI()">Run Add Ions</button>
-                    <div id="addIonRunStatus" style="margin-top: 10px; color: #555; font-size: 0.95em;"></div>
+                    <div id="addIonRunStatus" class="help-text"></div>
                 </fieldset>
          </div>
 
@@ -798,55 +857,48 @@
             
             <!-- Protein Constraints Group -->
             <div class="form-group">
-              <label class="checkbox-label">
-                Constrain protein
+              <label class="chip-toggle">
                 <input type="checkbox" id="constrainProtein" name="constrainProtein">
-                <span class="checkmark"></span>
+                <span class="chip-toggle__face">Constrain protein</span>
               </label>
         
               <div class="checkbox-subgroup">
-                <label class="checkbox-label">
-                  Backbone only
+                <label class="chip-toggle">
                   <input type="checkbox" id="constrainProteinBackbone" name="constrainProteinBackbone">
-                  <span class="checkmark"></span>
+                  <span class="chip-toggle__face">Backbone only</span>
                 </label>
         
-                <label class="checkbox-label">
-                  Sidechain only
+                <label class="chip-toggle">
                   <input type="checkbox" id="constrainProteinSidechain" name="constrainProteinSidechain">
-                  <span class="checkmark"></span>
+                  <span class="chip-toggle__face">Sidechain only</span>
                 </label>
               </div>
             </div>
         
             <!-- Ligand Constraints Group -->
             <div class="form-group">
-              <label class="checkbox-label">
-                Constrain ligand atoms
+              <label class="chip-toggle">
                 <input type="checkbox" id="constrainLigandAtoms" name="constrainLigandAtoms">
-                <span class="checkmark"></span>
+                <span class="chip-toggle__face">Constrain ligand atoms</span>
               </label>
             </div>
         
             <!-- SSE Constraints Group -->
             <div class="form-group">
-              <label class="checkbox-label">
-                Constrain Secondary Structure Elements (SSE's)
+              <label class="chip-toggle">
                 <input type="checkbox" id="constrainSSE" name="constrainSSE">
-                <span class="checkmark"></span>
+                <span class="chip-toggle__face">Constrain Secondary Structure Elements (SSE's)</span>
               </label>
         
               <div class="checkbox-subgroup">
-                <label class="checkbox-label">
-                  Helices
+                <label class="chip-toggle">
                   <input type="checkbox" id="constrainHelices" name="constrainHelices">
-                  <span class="checkmark"></span>
+                  <span class="chip-toggle__face">Helices</span>
                 </label>
         
-                <label class="checkbox-label">
-                  Sheets
+                <label class="chip-toggle">
                   <input type="checkbox" id="constrainSheets" name="constrainSheets">
-                  <span class="checkmark"></span>
+                  <span class="chip-toggle__face">Sheets</span>
                 </label>
               </div>
             </div>
@@ -884,43 +936,51 @@
             
             <!--step size -->
             
-            <label for="HbondTug">Restraints:</label>
-            <button id="SaltBridgeTug" onclick="SaltBridgeTug()">Saltbridge</button>
-            <button id="HbondTug" onclick="HBondTug()">HBond</button>
-            <button id="WeakHbondTug" onclick="WeakHBondTug()">Weak HBond</button>
-            <button id="PiPi-P-Tug" onclick="PiPiPTug()">π-P</button>
-            <button id="PiPi-T-Tug" onclick="PiPiTTug()">π-T</button>
+            <label class="field-label" for="HbondTug">Restraints:</label>
+            <div class="btn-row">
+            <button class="btn-chip" id="SaltBridgeTug" onclick="SaltBridgeTug()">Saltbridge</button>
+            <button class="btn-chip" id="HbondTug" onclick="HBondTug()">HBond</button>
+            <button class="btn-chip" id="WeakHbondTug" onclick="WeakHBondTug()">Weak HBond</button>
+            <button class="btn-chip" id="PiPi-P-Tug" onclick="PiPiPTug()">π-P</button>
+            <button class="btn-chip" id="PiPi-T-Tug" onclick="PiPiTTug()">π-T</button>
             
-            <button id="HBond-Pi-Tug" onclick="HBondPiTug()">π-Cation</button>
+            <button class="btn-chip" id="HBond-Pi-Tug" onclick="HBondPiTug()">π-Cation</button>
             
-            <button id="Cation-Pi-Tug" onclick="CationPiTug()">π-Cation</button>
+            <button class="btn-chip" id="Cation-Pi-Tug" onclick="CationPiTug()">π-Cation</button>
             
-            <button id="Halogen-Pi-Tug" onclick="HalogenPiTug()">π-Halogen</button>
-            <button id="Halogen-Bond-Tug" onclick="HalogenBondTug()">Halogen Bond</button>
+            <button class="btn-chip" id="Halogen-Pi-Tug" onclick="HalogenPiTug()">π-Halogen</button>
+            <button class="btn-chip" id="Halogen-Bond-Tug" onclick="HalogenBondTug()">Halogen Bond</button>
+            </div>
             
-            <button id="toggleTugButton" onclick="toggleTugMode()">Toggle Tug Mode</button>
+            <div class="btn-row">
+            <button class="btn-secondary" id="toggleTugButton" onclick="toggleTugMode()">Toggle Tug Mode</button>
+            </div>
             
             
-            <label for="SimulatingAnneling">Algorithms:</label>
-            <button id="SimAnnButton" onclick="runSimulatedAnneling()">Simulated Annealing</button>
-            <button id="minimiseSimulationButton" onclick="minimiseSimulation()">Minimize</button>
+            <label class="field-label" for="SimulatingAnneling">Algorithms:</label>
+            <div class="btn-row">
+            <button class="btn-secondary" id="SimAnnButton" onclick="runSimulatedAnneling()">Simulated Annealing</button>
+            <button class="btn-secondary" id="minimiseSimulationButton" onclick="minimiseSimulation()">Minimize</button>
+            </div>
             
-            <label for="toggleButton">Control:</label>
+            <label class="field-label" for="toggleButton">Control:</label>
 
             <!-- Option A: two separate buttons (simple show/hide) -->
+            <div class="btn-row">
             <button id="RunSimulationButton" onclick="handleRunClick()">Run</button>
             <button id="PauseSimulationButton" onclick="handlePauseClick()" style="display:none;">Pause</button>
             
-            <button id="StopSimulationButton" onclick="stopSimulation()">Stop</button>
-            <button id="SaveSimulationButton" onclick="saveSimulationSnapshot()">Save</button>
-            <button id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button>
-            <button id="AddCovelentLigand" onclick="AddCovelentLigandToSimulation()">Add Covelent Ligand</button>
+            <button class="btn-danger" id="StopSimulationButton" onclick="stopSimulation()">Stop</button>
+            <button class="btn-secondary" id="SaveSimulationButton" onclick="saveSimulationSnapshot()">Save</button>
+            <button class="btn-secondary" id="AddLigandButton" onclick="AddLigandToSimulation()">Add Ligand</button>
+            <button class="btn-secondary" id="AddCovelentLigand" onclick="AddCovelentLigandToSimulation()">Add Covelent Ligand</button>
+            </div>
 
             <!-- undo -->
             <div id="simulationStatus" class="sim-status"></div>
         </div>
 
-        <div class="container" id="preprocResultsContent">
+        <div class="container" id="activeRestraintsPanel">
             <legend>Active Restraints</legend>
             <div id="activeRestraintsContainer">
                 <ul id="activeRestraints"></ul>
@@ -1054,6 +1114,91 @@
       if (typeof updateMaskModeVisibility === "function") updateMaskModeVisibility();
       if (typeof updateRefineMethodVisibility === "function") updateRefineMethodVisibility();
     });
+
+    // ---------------- Toast notifications ----------------
+    // Non-blocking replacement for alert(). kind: "info" | "success" | "error" | "warning".
+    function showToast(message, kind, timeout) {
+        const host = document.getElementById("toastHost");
+        if (!host) { console.log("[toast]", kind || "info", message); return; }
+        const t = document.createElement("div");
+        t.className = "toast " + (kind || "info");
+        const msg = document.createElement("span");
+        msg.className = "toast__msg";
+        msg.textContent = message;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "toast__close";
+        close.setAttribute("aria-label", "Dismiss");
+        close.innerHTML = "&times;";
+        close.onclick = () => { if (t.parentNode) t.parentNode.removeChild(t); };
+        t.appendChild(msg);
+        t.appendChild(close);
+        host.appendChild(t);
+        const ms = (typeof timeout === "number") ? timeout : (kind === "error" ? 8000 : 4000);
+        if (ms > 0) setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, ms);
+    }
+
+    // Route any legacy alert() — including those emitted from the Python command
+    // modules via run_js_code('alert(...)') — through the non-blocking toast system,
+    // so no edits to those modules are required. Kind is inferred from the message.
+    window.alert = function(message) {
+        const m = String(message);
+        let kind = "info";
+        if (/\b(fail(ed|s|ure)?|error|invalid|unable|cannot|can't|couldn't|could not|not found|no longer|does not exist|doesn't)\b/i.test(m)) {
+            kind = "error";
+        } else if (/\b(select|provide|provided|first|need(s|ed)?|set an|set a|before|no )\b/i.test(m)) {
+            kind = "warning";
+        }
+        showToast(m, kind);
+    };
+
+    // ---------------- Context chips + Setup completion ----------------
+    function _setChip(chipId, value) {
+        const chip = document.getElementById(chipId);
+        if (!chip) return;
+        const valEl = chip.querySelector(".context-chip__value");
+        const has = value && String(value).trim() && value !== "None" && value !== "N/A";
+        if (valEl) valEl.textContent = has ? value : "—";
+        chip.classList.toggle("is-empty", !has);
+    }
+
+    function _selectLabel(selectId) {
+        const s = document.getElementById(selectId);
+        if (!s || s.selectedIndex < 0) return "";
+        const opt = s.options[s.selectedIndex];
+        return opt ? (opt.textContent || opt.value || "").trim() : "";
+    }
+
+    function updateContextChips() {
+        const model = _selectLabel("models");
+        const map = _selectLabel("maps");
+        const resEl = document.getElementById("resolution");
+        const res = resEl ? (resEl.value || "").trim() : "";
+        const outEl = document.getElementById("output");
+        const out = outEl ? (outEl.textContent || "").trim() : "";
+        _setChip("chipModel", model);
+        _setChip("chipMap", map);
+        _setChip("chipRes", res ? res + " Å" : "");
+        _setChip("chipOutput", out ? out.replace(/[\\/]+$/, "").split(/[\\/]/).pop() : "");
+        updateSetupCompletion(model, map);
+    }
+
+    function updateSetupCompletion(model, map) {
+        const check = document.getElementById("setupCheck");
+        if (!check) return;
+        const done = !!(model && model !== "None") && !!(map && map !== "None" && map !== "N/A");
+        check.textContent = done ? "✓" : "";
+    }
+
+    window.addEventListener("DOMContentLoaded", () => {
+        ["models", "maps"].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener("change", updateContextChips);
+        });
+        const resEl = document.getElementById("resolution");
+        if (resEl) resEl.addEventListener("input", updateContextChips);
+        updateContextChips();
+    });
     
     
     function toggleAdvancedOptions() {
@@ -1160,16 +1305,16 @@
 
     function runMapScores() {
         const keys = getSelectedTargetKeys();
-        if (keys.length === 0) { alert("Select at least one ligand to score."); return; }
+        if (keys.length === 0) { showToast("Select at least one ligand to score.", "warning"); return; }
         const scores = getSelectedScores();
-        if (scores.length === 0) { alert("Select at least one score to compute."); return; }
+        if (scores.length === 0) { showToast("Select at least one score to compute.", "warning"); return; }
         const payload = JSON.stringify({ keys: keys, scores: scores });
         sendParameterToBackend("chemem:RunMapScores", "scoreReq", payload, "StringParameter");
     }
 
     function scoreCurrentSelection() {
         const scores = getSelectedScores();
-        if (scores.length === 0) { alert("Select at least one score to compute."); return; }
+        if (scores.length === 0) { showToast("Select at least one score to compute.", "warning"); return; }
         const payload = JSON.stringify({ scores: scores });
         sendParameterToBackend("chemem:ScoreCurrentSelection", "scoreReq", payload, "StringParameter");
     }
@@ -1270,6 +1415,7 @@
      
      function setFilePath( elementId, file){
          document.getElementById(elementId).textContent = file;
+         if (elementId === "output" && typeof updateContextChips === "function") updateContextChips();
      }
 
      function setLigandDropActive(active) {
@@ -1302,7 +1448,7 @@
         const selectElement = document.getElementById(elementId);
         
         if (!selectElement) {
-            alert("No select element found with ID:");
+            showToast("No select element found.", "error");
             return;
         }
         selectElement.innerHTML = ''; // Clear existing options
@@ -2049,7 +2195,7 @@
          // Collect the SMILES string from the input field
          const smilesString = document.getElementById("ligandSmiles").value.trim();
          if (!smilesString) {
-             alert("No SMILES string provided.");
+             showToast("No SMILES string provided.", "warning");
              return;
          }
          
@@ -2071,7 +2217,7 @@
          // Collect the file path from the span, not an input field
          const ligandFilePath = document.getElementById("ligandFilePath").textContent.trim();
          if (!ligandFilePath) {
-             alert("No ligand file provided.");
+             showToast("No ligand file provided.", "warning");
              return;
          }
      
@@ -2159,7 +2305,7 @@
 
         const smilesString = document.getElementById("ligandSmilesForProtonation").value.trim();
         if (!smilesString) {
-            alert("No SMILES string or tracked ligand selected.");
+            showToast("No SMILES string or tracked ligand selected.", "warning");
             return;
         }
 
@@ -2181,7 +2327,7 @@
 
     function addSmilesToProtonationList(smiles, trackedId = null) {
         if (!smiles) {
-            alert("No SMILES string provided.");
+            showToast("No SMILES string provided.", "warning");
             return;
         }
 
@@ -2301,23 +2447,21 @@
         loadIcon.alt = "Load";
         loadIcon.className = "icon"; // Add a class for styling
         loadButton.appendChild(loadIcon);
-        
-        
-        // transfer to conf 1 here
+
+
+        // Create the + Add button (promote this candidate into the docking conf)
         const addButton = document.createElement("button");
-        addButton.className = "icon-button"; // Add a class for styling
+        addButton.className = "icon-button";
+        addButton.title = "Add to docking conf";
         addButton.onclick = function() {
-            
-            sendSiteValueToBackend("chemem:TransferSiteToConf", dataKey)
-            // Add additional functionality here
+            sendSiteValueToBackend("chemem:TransferSiteToConf", dataKey);
         };
-        
-        const addIcon =  document.createElement("img");
-        addIcon.src = "img/add.png"; 
+        const addIcon = document.createElement("img");
+        addIcon.src = "img/add.png";
         addIcon.alt = "+";
         addIcon.className = "icon";
-        addButton.appendChild(addIcon)
-        
+        addButton.appendChild(addIcon);
+
         // Create the Delete button
         const deleteButton = document.createElement("button");
         deleteButton.className = "icon-button delete-button-click"; // Add a class for styling
@@ -2365,10 +2509,56 @@
     function removeBindingSite(key) {
         sendSiteValueToBackend("chemem:RemoveBindingSite", key);
     }
+
+    // Show a promoted binding site in the Setup "Added Binding Sites" (conf) list.
+    // Called by the backend (TransferSiteToConf) after the + Add icon is clicked.
+    function addToConfList(siteValue, key) {
+        const confList = document.getElementById("centroidList");
+        if (!confList) return;
+        // Skip if this site is already in the conf list.
+        const already = Array.from(confList.children).some(el => el.getAttribute("data-key") === key);
+        if (already) return;
+
+        const li = document.createElement("li");
+        li.setAttribute("data-key", key);
+
+        const label = document.createElement("span");
+        label.textContent = siteValue;
+        li.appendChild(label);
+
+        const deleteButton = document.createElement("button");
+        deleteButton.className = "icon-button delete-button-click";
+        deleteButton.title = "Remove from docking conf";
+        deleteButton.onclick = function() {
+            confList.removeChild(li);
+            removeBindingSiteFromConf(key);
+        };
+        const deleteIcon = document.createElement("img");
+        deleteIcon.src = "img/trash.png";
+        deleteIcon.alt = "Delete";
+        deleteIcon.className = "icon";
+        deleteButton.appendChild(deleteIcon);
+        li.appendChild(deleteButton);
+
+        confList.appendChild(li);
+    }
+
+    // Remove a site from the docking conf (Setup list). The candidate is untouched.
+    function removeBindingSiteFromConf(key) {
+        sendSiteValueToBackend("chemem:RemoveBindingSiteFromConf", key);
+    }
+
+    // Empty both binding-site lists (candidates + conf); used when the model/map is removed.
+    function clearBindingSiteLists() {
+        const candidates = document.getElementById("manualBindingSitesList");
+        if (candidates) candidates.innerHTML = "";
+        const conf = document.getElementById("centroidList");
+        if (conf) conf.innerHTML = "";
+    }
     
     function setEditBindingSite(value) {
         //document.getElementById('bindingSiteInput').value = value;
-        alert("Here");
+        console.log("setEditBindingSite", value);
     }
     
     function populateFieldsFromBackendString(dataString) {
@@ -2389,16 +2579,48 @@
             const boxSizeY = parseFloat(boxSizeMatch[2]);
             const boxSizeZ = parseFloat(boxSizeMatch[3]);
     
-            // Populate the input fields
-            document.getElementById("manualCentroidX").value = centroidX;
-            document.getElementById("manualCentroidY").value = centroidY;
-            document.getElementById("manualCentroidZ").value = centroidZ;
-            document.getElementById("manualboxSizeX").value = boxSizeX;
-            document.getElementById("manualboxSizeY").value = boxSizeY;
-            document.getElementById("manualboxSizeZ").value = boxSizeZ;
+            // Populate the manual binding-site form (guarded so a missing field never throws)
+            const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            setVal("centroidX", centroidX);
+            setVal("centroidY", centroidY);
+            setVal("centroidZ", centroidZ);
+            setVal("QuickboxSizeX", boxSizeX);
+            setVal("QuickboxSizeY", boxSizeY);
+            setVal("QuickboxSizeZ", boxSizeZ);
         } else {
             console.error("Invalid data string format");
         }
+    }
+
+    // Generate a unique key for a manually-defined binding site.
+    function generateUniqueId() {
+        return 'bindingSite-' + Date.now();
+    }
+
+    // Clear the manual Centroid + Box-size entry fields.
+    function resetManualBindingSiteFields() {
+        ["centroidX", "centroidY", "centroidZ", "QuickboxSizeX", "QuickboxSizeY", "QuickboxSizeZ"]
+            .forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    }
+
+    // Register a manually-typed binding site straight into the docking list.
+    function addManualBindingSite() {
+        const x = document.getElementById("centroidX").value;
+        const y = document.getElementById("centroidY").value;
+        const z = document.getElementById("centroidZ").value;
+        const boxX = document.getElementById("QuickboxSizeX").value;
+        const boxY = document.getElementById("QuickboxSizeY").value;
+        const boxZ = document.getElementById("QuickboxSizeZ").value;
+
+        if (!(x && y && z && boxX && boxY && boxZ)) {
+            showToast("Fill in all centroid and box-size fields.", "warning");
+            return;
+        }
+
+        const bindingSiteValue = `(${x}, ${y}, ${z}) | (${boxX}, ${boxY}, ${boxZ})`;
+        sendParameterToBackend("chemem:AddManualBindingSite", generateUniqueId(),
+                               bindingSiteValue, "BindingSiteParameter");
+        resetManualBindingSiteFields();
     }
     
     function autoSiteFinder() {
@@ -2727,7 +2949,7 @@
             }
         });
         if (selected.length === 0) {
-            alert("Select at least one pose to refine.");
+            showToast("Select at least one pose to refine.", "warning");
             return;
         }
 
@@ -2964,7 +3186,7 @@
         const jobId = jobData.id;
         const jobList = document.getElementById("jobList");
         if (!jobList) {
-            alert("Failed to find the job list element.");
+            showToast("Failed to find the job list element.", "error");
             return;
         }
 
@@ -3220,7 +3442,7 @@
           const removeBtn = document.createElement("button");
           removeBtn.className = "icon-button";
           removeBtn.onclick = function(){
-              alert("remove button click");
+              console.log("remove button click");
           
           }
           
@@ -3322,7 +3544,7 @@
          // Collect the SMILES string from the input field
          const smilesString = document.getElementById("ligandSimulationSmiles").value.trim();
          if (!smilesString) {
-             alert("No SMILES string provided.");
+             showToast("No SMILES string provided.", "warning");
              return;
          }
          
@@ -3415,7 +3637,7 @@
         // Collect the file path from the span, not an input field
         const ligandFilePath = document.getElementById("ligandSimulationFilePath").textContent.trim();
         if (!ligandFilePath) {
-            alert("No ligand file provided.");
+            showToast("No ligand file provided.", "warning");
             return;
         }
     
@@ -3817,7 +4039,7 @@
         const select = document.getElementById("ligandGeomSource");
         const id = select ? select.value : "";
         if (!id) {
-            alert("Select a tracked ligand first.");
+            showToast("Select a tracked ligand first.", "warning");
             return;
         }
         sendSiteValueToBackend("chemem:ExportLigandTorsions", id);
@@ -4022,13 +4244,18 @@
 
     function runSimulatedAnneling() {
         const simulationContent = document.getElementById('SimulationContent');
-        simulationContent.innerHTML = '<legend>Simulation</legend>';
+        simulationContent.innerHTML = '<legend>Simulated Annealing</legend>';
+
+        const intro = document.createElement('p');
+        intro.className = 'help-text';
+        intro.textContent = 'Set the annealing schedule below, then Run. Cancel returns to the simulation view.';
+        simulationContent.appendChild(intro);
 
         const fields = [
             { id: 'simAnnCycles', label: 'Cycles', value: '1' },
-            { id: 'startTemp', label: 'Start Temperature', value: '0' },
-            { id: 'normTemp', label: 'Normalization Temperature', value: '300' },
-            { id: 'topTemp', label: 'Top Temperature', value: '315' },
+            { id: 'startTemp', label: 'Start Temperature (K)', value: '0' },
+            { id: 'normTemp', label: 'Normalization Temperature (K)', value: '300' },
+            { id: 'topTemp', label: 'Top Temperature (K)', value: '315' },
             { id: 'tempStep', label: 'Temperature Step', value: '1' },
             { id: 'initialHeatingInterval', label: 'Initial Heating Interval', value: '100' },
             { id: 'holdTopTempInterval', label: 'Hold Top Temperature Interval', value: '1000' },
@@ -4048,22 +4275,33 @@
             inputColumns.appendChild(div);
         });
 
-        const div = document.createElement('div');
-        div.className = 'form-group';
-        div.innerHTML = `
-            <label for="localMinimisation">Local Minimisation:</label>
-            <input type="checkbox" id="localMinimisation" name="localMinimisation" />
-        `;
-        inputColumns.appendChild(div);
-
         simulationContent.appendChild(inputColumns);
 
-        const runButtonDiv = document.createElement('div');
-        runButtonDiv.className = 'run-button';
-        runButtonDiv.innerHTML = `
-            <button onclick="startSimulatedAnneling()">Run</button>
+        // Local Minimisation as a proper styled checkbox on its own row
+        // (was previously an unstyled checkbox crammed into the numeric grid).
+        const minDiv = document.createElement('div');
+        minDiv.className = 'form-group';
+        minDiv.innerHTML = `
+            <label class="checkbox-label">
+                Local Minimisation
+                <input type="checkbox" id="localMinimisation" name="localMinimisation">
+                <span class="checkmark"></span>
+            </label>
         `;
-        simulationContent.appendChild(runButtonDiv);
+        simulationContent.appendChild(minDiv);
+
+        const actions = document.createElement('div');
+        actions.className = 'btn-row';
+        actions.innerHTML = `
+            <button type="button" onclick="startSimulatedAnneling()">Run</button>
+            <button type="button" class="btn-secondary" onclick="cancelSimulatedAnneling()">Cancel</button>
+        `;
+        simulationContent.appendChild(actions);
+    }
+
+    function cancelSimulatedAnneling() {
+        const simulationContent = document.getElementById('SimulationContent');
+        if (simulationContent) simulationContent.innerHTML = '<legend>Simulation</legend>';
     }
 
     function startSimulatedAnneling() {

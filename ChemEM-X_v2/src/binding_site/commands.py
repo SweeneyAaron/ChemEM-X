@@ -20,6 +20,22 @@ from chimerax.ChemEM.core.tools import ChemEMJob, IONFIXER_JOB , get_output_from
 
 #TODO! change Rendering!!
 
+def render_site_if_possible(chemem, site):
+    """Render a binding site only when it is a rich, renderable ChemEM2BindingSite.
+    Lightweight BindingSiteParameter sites (manual entry, or the marker fallback)
+    have no add_to_session method and are skipped rather than crashing."""
+    if not hasattr(site, "add_to_session"):
+        return
+    current_model = chemem.parameters.get_parameter('current_model')
+    if current_model is None:
+        return
+    if chemem.rendered_site is not None:
+        chemem.rendered_site.reset()
+    chemem.rendered_site = RenderBindingSite(chemem.session, site,
+                                             current_model,
+                                             chemem.parameters.get_parameter('current_map'))
+
+
 class RenderBindingSiteFromClick(Command):
     
     @classmethod 
@@ -28,44 +44,32 @@ class RenderBindingSiteFromClick(Command):
         js_code = f'populateFieldsFromBackendString("{site_value}");'
         return js_code
     
-    @classmethod 
+    @classmethod
     def run(cls, chemem, query):
         site = chemem.parameters.get_list_parameters('binding_sites', query)[0]
-        if chemem.rendered_site is not None:
-            chemem.rendered_site.reset()
-        
-        chemem.rendered_site =  RenderBindingSite(chemem.session, 
-                                                  site, 
-                                                  chemem.parameters.parameters['current_model'],
-                                                  chemem.parameters.get_parameter('current_map'))
+        render_site_if_possible(chemem, site)
         chemem.run_js_code(cls.js_code(site))
 
 class TransferSiteToConf(Command):
-    
+    """The + Add icon: promote a candidate binding site into the conf (the list
+    docking reads) and show it in the Setup 'Added Binding Sites' list."""
+
     @classmethod
     def js_code(cls, site):
-        centroid_x = round(site.centroid[0], 3)
-        centroid_y = round(site.centroid[1], 3)
-        centroid_z = round(site.centroid[2], 3)
-        box_x = int(site.box_size[0])
-        box_y = int(site.box_size[1])
-        box_z = int(site.box_size[2])
-        
-        return f"""
-        document.getElementById("centroidX").value = {centroid_x};
-        document.getElementById("centroidY").value = {centroid_y};
-        document.getElementById("centroidZ").value = {centroid_z};
-        document.getElementById("QuickboxSizeX").value = {box_x};
-        document.getElementById("QuickboxSizeY").value = {box_y};
-        document.getElementById("QuickboxSizeZ").value = {box_z};
-        addCentroid();
-        resetManualBindingSiteFields();
-        """
-    @classmethod 
+        site_value = f"Centroid: ({round(site.centroid[0], 3)}, {round(site.centroid[1], 3)}, {round(site.centroid[2], 3)}) | Box Size: ({int(site.box_size[0])}, {int(site.box_size[1])}, {int(site.box_size[2])});"
+        return f'addToConfList("{site_value}", "{site.name}");'
+
+    @classmethod
     def run(cls, chemem, query):
-        
-        site = chemem.parameters.get_list_parameters('binding_sites', query)[0]
-        #chemem.parameters.add_list_parameter('binding_sites_conf', site)
+        candidates = chemem.parameters.get_list_parameters('binding_sites', query)
+        if not candidates:
+            return
+        site = candidates[0]
+        # Don't add the same site to the conf twice.
+        if chemem.parameters.get_list_parameters('binding_sites_conf', site.name):
+            chemem.run_js_code('showToast("Binding site already added.", "info");')
+            return
+        chemem.parameters.add_list_parameter('binding_sites_conf', site)
         chemem.run_js_code(cls.js_code(site))
 
 
@@ -89,17 +93,9 @@ class AutoSiteFinder(Command):
                                         chemem.parameters.get_parameter('current_map'))
         
         for site in chemem.autosites:
-            if chemem.rendered_site is not None:
-                chemem.rendered_site.reset()
-            
-            chemem.current_binding_site_id = site.name 
-            #RenderAutoSite
-            chemem.rendered_site = RenderBindingSite(chemem.session,
-                                                         site,
-                                                         chemem.parameters.parameters['current_model'],
-                                                         chemem.parameters.get_parameter('current_map'))
-                                                         
-            
+            chemem.current_binding_site_id = site.name
+            render_site_if_possible(chemem, site)
+
             js_code = cls.js_code(site)
             chemem.run_js_code(js_code)
             
@@ -151,21 +147,46 @@ class BindingSiteFromMarker(Command):
                     site = BindingSiteParameter.get_from_centroid(centroid, chemem)
                     
                 chemem.parameters.add_list_parameter('binding_sites', site)
-                chemem.current_binding_site_id = site.name 
-                
-                chemem.rendered_site =  RenderBindingSite(chemem.session, site, 
-                                                          chemem.parameters.parameters['current_model'],
-                                                          chemem.parameters.get_parameter('current_map'))
-                
+                chemem.current_binding_site_id = site.name
+                render_site_if_possible(chemem, site)
+
                 js_code = cls.js_code(site)
                 chemem.run_js_code(js_code)
                 
                 #don't think i need this?
                 chemem.current_renderd_site_id = site.name
                 #set current working site in backend!!!
-                
-                
-                
+
+
+
+class AddManualBindingSite(Command):
+    """Manual define: register a binding site typed into the Centroid + Box form
+    as a *candidate* (the 'binding_sites' list, like marker/autodetect). It only
+    enters the docking conf once the user clicks + Add (TransferSiteToConf).
+
+    The form sends a BindingSiteParameter ("(x, y, z) | (bx, by, bz)"). It is a
+    lightweight site (no add_to_session), so it is listed + dockable but not drawn
+    as a 3-D mesh (render_site_if_possible skips it)."""
+
+    @classmethod
+    def js_code(cls, site):
+        site_value = f"Centroid: ({round(site.centroid[0], 3)}, {round(site.centroid[1], 3)}, {round(site.centroid[2], 3)}) | Box Size: ({int(site.box_size[0])}, {int(site.box_size[1])}, {int(site.box_size[2])});"
+        return f'addBindingSiteEntry("{site_value}", "{site.name}");'
+
+    @classmethod
+    def run(cls, chemem, query):
+        if chemem.parameters.get_parameter('current_model') is None:
+            chemem.run_js_code('showToast("Load a model first.", "warning");')
+            return
+
+        site = query  # BindingSiteParameter parsed from the form (centroid + box)
+        chemem.parameters.add_list_parameter('binding_sites', site)
+        chemem.current_binding_site_id = site.name
+        render_site_if_possible(chemem, site)
+
+        chemem.run_js_code(cls.js_code(site))
+
+
 class SetSolventSpecies(Command):
     @classmethod
     def run(cls, chemem, query):
@@ -208,10 +229,18 @@ class RemoveBindingSite(Command):
         #TODO! check the effects of this elsewhere
         if chemem.rendered_site is not None:
             if query == chemem.rendered_site.binding_site.name:
-                chemem.rendered_site.reset() 
+                chemem.rendered_site.reset()
                 chemem.rendered_site = None
-                
-                
+
+
+class RemoveBindingSiteFromConf(Command):
+    """Remove a binding site from the docking conf (Setup 'Added Binding Sites').
+    The candidate stays in the candidate list; it just won't be docked."""
+    @classmethod
+    def run(cls, chemem, query):
+        chemem.parameters.remove_list_parameter('binding_sites_conf', query)
+
+
 class SetEditBindingSiteValue(Command):
     @classmethod 
     def run(cls, chemem, query):
