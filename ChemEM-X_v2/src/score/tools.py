@@ -29,19 +29,28 @@ from chimerax.ChemEM.score import scoring
 # ---------------------------------------------------------------------------
 
 def maplike_from_volume(volume):
-    """Build a ``scoring.MapLike`` from a ChimeraX ``Volume`` (full region).
+    """Build a ``scoring.MapLike`` from a ChimeraX ``Volume``.
 
-    Uses ``data_origin_and_step()`` (origin/apix in xyz Å) and the full data
-    matrix (z, y, x) - the same idiom the simulation MapBias force uses - so the
-    map sits in the same coordinate frame as the atoms' scene coordinates.
+    Reads the ABSOLUTE underlying grid via ``volume.data`` (the ``GridData``),
+    NOT the Volume's display views. ``volume.full_matrix()`` and
+    ``volume.data_origin_and_step()`` track the on-screen rendering state
+    (subsampling step, a cropped ``region`` from a binding-site display or a
+    built simulation, visibility), so reading through them scores the ligand
+    against a mis-aligned/decimated density - giving CCC = 0 and negative
+    Q-scores. ``GridData.matrix()``/``origin``/``step`` are full-resolution and
+    independent of how the map is rendered, matching the atoms' scene
+    coordinates. (Same absolute-grid idiom as ``self.map.data.matrix()`` in
+    binding_site/tools.py.)
+
+    origin/step are xyz Å; the matrix is (z, y, x) - exactly what ``MapLike`` and
+    the scoring math expect.
     """
     if volume is None:
         return None
-    origin, apix = volume.data_origin_and_step()
-    try:
-        density = volume.full_matrix()
-    except Exception:
-        density = volume.matrix()
+    data = volume.data
+    origin = data.origin
+    apix = data.step
+    density = data.matrix()
     # resolution is passed separately to the metric drivers (from the Setup-tab
     # 'resolution' parameter); MapLike.resolution is unused by the scoring math.
     return scoring.MapLike(origin, apix, np.asarray(density, dtype=np.float64), 0.0)

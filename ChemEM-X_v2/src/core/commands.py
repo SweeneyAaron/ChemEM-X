@@ -7,7 +7,7 @@ Created on Wed Mar 12 12:28:39 2025
 """
 import os
 import json
-from chimerax.ChemEM.core.tools import condense_path, validate_ligand_file, _build_atom_matcher_from_model_and_sdf, register_tracked_ligand
+from chimerax.ChemEM.core.tools import validate_ligand_file, _build_atom_matcher_from_model_and_sdf, register_tracked_ligand
 from chimerax.ChemEM.core.parameters import PathParameter
 from chimerax import open_command
 from chimerax.atomic.structure import AtomicStructure
@@ -73,13 +73,14 @@ class Command:
 
 class SetDir(Command):
     
-    @classmethod 
+    @classmethod
     def js_code(cls,  element_id, file):
-        condensed_path = condense_path(file)
-        js_code = f'setFilePath( "{element_id}", "{condensed_path}" );' 
+        # Send the FULL path; the frontend (setFilePath/condensePath) truncates for
+        # display while preserving the full path in data-fullpath / title.
+        js_code = f'setFilePath( "{element_id}", "{file}" );'
         return js_code
-    
-    @classmethod 
+
+    @classmethod
     def run(cls, chemem, query):
         file_dialog =  open_command.dialog.OpenFolderDialog(chemem.session.ui.main_window, chemem.session)
     

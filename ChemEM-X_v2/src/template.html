@@ -118,7 +118,7 @@
 
                             <button type="button" class="dialog-button" id="ligandFile" onclick="readFile('ligandFilePath')">Choose File</button>
                             <span class="file-path" id="ligandFilePath"></span>
-                            <span class="drop-hint">or drop an .sdf / .mol file here</span>
+                            <span class="drop-hint">or drop an .sdf file here</span>
                         </div>
                         <button type="button" class="add-button" onclick="addLigandFile()">Add</button>
                     </div>
@@ -268,6 +268,7 @@
          </div>
         -->
 
+
          <div class="container" id="manual-binding-site">
 
              <fieldset>
@@ -283,7 +284,7 @@
             <fieldset>
             <legend>Place Solvent / Ions</legend>
                 <p class="help-text">
-                    Pick a species, then right-click on the model or map surface to place it exactly where you click.
+                    Pick a species, then right-click on the model or map surface to place it.
                 </p>
                 <div class="form-group">
                     <label for="solventSpeciesSelect">Species:</label>
@@ -1015,11 +1016,7 @@
         <div class="container" id="scorecontent">
             <fieldset>
                 <legend>Score Ligands</legend>
-                <p class="score-help">
-                    Score any pose from the pipeline (tracked, docked, refined, or
-                    in a running simulation) against the current map. Map scores are
-                    instant; MMGBSA is slower and runs in the background.
-                </p>
+                
 
                 <div class="score-controls">
                     <button type="button" onclick="refreshScoreTargets()">Refresh ligands</button>
@@ -1175,7 +1172,7 @@
         const resEl = document.getElementById("resolution");
         const res = resEl ? (resEl.value || "").trim() : "";
         const outEl = document.getElementById("output");
-        const out = outEl ? (outEl.textContent || "").trim() : "";
+        const out = outEl ? ((outEl.dataset.fullpath != null ? outEl.dataset.fullpath : outEl.textContent) || "").trim() : "";
         _setChip("chipModel", model);
         _setChip("chipMap", map);
         _setChip("chipRes", res ? res + " Å" : "");
@@ -1413,8 +1410,47 @@
      
      }
      
+     // Filename-focused truncation for DISPLAY only. The full path is always kept
+     // in data-fullpath / title by the callers, so this never affects what is sent
+     // to the backend. Non-path strings (e.g. SMILES) are returned unchanged.
+     function condensePath(value, maxLen = 36) {
+         if (value == null) return "";
+         const s = String(value);
+         if (!/[\\/]/.test(s)) return s;            // not a path (e.g. SMILES) -> leave alone
+         if (s.length <= maxLen) return s;          // already short enough
+         const parts = s.split(/[\\/]/).filter(Boolean);
+         const name = parts.length ? parts[parts.length - 1] : s;
+         const parent = parts.length > 1 ? parts[parts.length - 2] : "";
+         let out = parent ? `…/${parent}/${name}` : `…/${name}`;
+         if (out.length > maxLen) out = `…/${name}`;                     // drop parent if still too long
+         if (out.length > maxLen) out = "…" + name.slice(-(maxLen - 1)); // pathological single long filename
+         return out;
+     }
+
+     // Full path is the source of truth for the backend; read it from data-fullpath
+     // (falling back to the visible text for safety). Null-safe.
+     function getFilePathValue(elementId) {
+         const el = document.getElementById(elementId);
+         if (!el) return "";
+         const v = el.dataset.fullpath != null ? el.dataset.fullpath : el.textContent;
+         return (v || "").trim();
+     }
+
+     function clearFilePath(elementId) {
+         const el = document.getElementById(elementId);
+         if (!el) return;
+         el.textContent = "";
+         el.removeAttribute("title");
+         delete el.dataset.fullpath;
+     }
+
      function setFilePath( elementId, file){
-         document.getElementById(elementId).textContent = file;
+         const el = document.getElementById(elementId);
+         if (!el) return;
+         const full = file == null ? "" : String(file);
+         el.dataset.fullpath = full;     // preserved for the backend / read-backs
+         el.title = full;                // full path on hover
+         el.textContent = condensePath(full);
          if (elementId === "output" && typeof updateContextChips === "function") updateContextChips();
      }
 
@@ -2214,8 +2250,8 @@
      function addLigandFile() {
          ligandIdCounter++;
      
-         // Collect the file path from the span, not an input field
-         const ligandFilePath = document.getElementById("ligandFilePath").textContent.trim();
+         // Collect the FULL file path (kept in data-fullpath; display may be truncated)
+         const ligandFilePath = getFilePathValue("ligandFilePath");
          if (!ligandFilePath) {
              showToast("No ligand file provided.", "warning");
              return;
@@ -2232,8 +2268,8 @@
          sendSiteValueToBackend("chemem:AddLigandFile", ligandData);
          
          // Optionally clear the displayed file path
-         document.getElementById("ligandFilePath").textContent = '';
-     
+         clearFilePath("ligandFilePath");
+
          // Update the ligand list on the UI
          addLigandToList(ligandData);
      }
@@ -2244,8 +2280,10 @@
          // Create the list item
          const li = document.createElement('li');
          li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
-         li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
-         
+         li.textContent = `ID: ${ligandData.id}, ${condensePath(ligandData.value)}`;
+         li.title = ligandData.value;            // full path on hover
+         li.dataset.fullpath = ligandData.value; // full path preserved
+
          // Create the remove button
          const removeBtn = document.createElement('button');
          removeBtn.textContent = 'Remove';
@@ -2262,9 +2300,11 @@
      function updateLigandListEntry(id, value) {
          const li = document.getElementById(`ligand-${id}`);
          if (!li) return;
+         li.title = value;            // full path on hover
+         li.dataset.fullpath = value; // full path preserved
          // The first child node is the text node; the Remove button follows it.
          if (li.childNodes.length > 0 && li.childNodes[0].nodeType === Node.TEXT_NODE) {
-             li.childNodes[0].nodeValue = `ID: ${id}, ${value}`;
+             li.childNodes[0].nodeValue = `ID: ${id}, ${condensePath(value)}`;
          }
      }
 
@@ -3566,8 +3606,10 @@
         // Create the list item
         const li = document.createElement('li');
         li.id = `ligand-${ligandData.id}`;  // Assign a unique ID based on ligand ID
-        li.textContent = `ID: ${ligandData.id}, ${ligandData.value}`;
-        
+        li.textContent = `ID: ${ligandData.id}, ${condensePath(ligandData.value)}`;
+        li.title = ligandData.value;            // full path on hover
+        li.dataset.fullpath = ligandData.value; // full path preserved
+
         // Create the remove button
         const removeBtn = document.createElement('button');
         removeBtn.textContent = 'Remove';
@@ -3634,8 +3676,8 @@
     function addLigandFileToSimulation() {
         ligandIdCounter++;
     
-        // Collect the file path from the span, not an input field
-        const ligandFilePath = document.getElementById("ligandSimulationFilePath").textContent.trim();
+        // Collect the FULL file path (kept in data-fullpath; display may be truncated)
+        const ligandFilePath = getFilePathValue("ligandSimulationFilePath");
         if (!ligandFilePath) {
             showToast("No ligand file provided.", "warning");
             return;
@@ -3652,8 +3694,8 @@
         sendSiteValueToBackend("chemem:AddLigandFileToSimulation", ligandData);
         
         // Optionally clear the displayed file path
-        document.getElementById("ligandSimulationFilePath").textContent = '';
-    
+        clearFilePath("ligandSimulationFilePath");
+
         // Update the ligand list on the UI
         addLigandToSimulationList(ligandData);
     }

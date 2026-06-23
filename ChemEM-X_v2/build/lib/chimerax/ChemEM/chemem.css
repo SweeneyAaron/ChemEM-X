@@ -577,6 +577,15 @@ button[type="reset"]:hover {
     font-family: var(--font-mono);
     font-size: var(--fs-sm);
     color: var(--text-muted);
+    /* Safety net: even after filename-focused truncation, never let a long
+       value overflow the panel (full path remains in data-fullpath / title). */
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: inline-block;
+    vertical-align: bottom;
 }
 
 .centroid-input-group {
